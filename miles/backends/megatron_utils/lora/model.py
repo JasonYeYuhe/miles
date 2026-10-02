@@ -4,6 +4,7 @@ from argparse import Namespace
 from collections.abc import Sequence
 from contextlib import nullcontext
 
+from megatron.bridge.peft.utils import allreduce_expert_parallel_replicated_grads
 from megatron.core.distributed import DistributedDataParallel as DDP
 
 from miles.backends.megatron_utils.lora.optimizer import SlotOptimizer, accumulate_gradients, step_slot_optimizers
@@ -44,6 +45,8 @@ def run_forward_backward(
             num_rollouts=None,
             forward_only=forward_only,
         )
+        if not forward_only:
+            allreduce_expert_parallel_replicated_grads(list(model))
     per_datum_outputs = [output for microbatch in losses_reduced for output in microbatch["per_datum"]]
     dumper_phase_util.finalize(model)
 
