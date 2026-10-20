@@ -16,6 +16,8 @@ Args:
   --model-dir / --data-dir: Directory holding Qwen3-4B / dapo-math-17k and aime-2024.
   --sglang-port: Port of the sglang server `train` connects to.
   --weight-transfer: shm (default) or disk.
+  --activation-in-fp32: SiLU in fp32 on both sides (train.py --activation-in-fp32, engine
+    SGLANG_TPU_ACTIVATION_FP32=1); pass it to `sglang` and `train` alike, `train` refuses a mismatch.
   --wandb-project: wandb project; empty disables wandb (the key comes from WANDB_API_KEY or ~/.netrc).
 
 =====================
@@ -67,6 +69,7 @@ class ScriptArgs(command_utils.ExecuteTrainConfig):
     sglang_env_script: str = "/sgl-workspace/sglang/benchmark/tpu/common_env.sh"
     weight_dir: str = "/dev/shm/miles_weights"
     weight_transfer: Literal["shm", "disk"] = "shm"
+    activation_in_fp32: bool = False
     wandb_project: str = "miles-tpu"
     extra_args: str = ""
 
@@ -96,7 +99,10 @@ def _serve_sglang(args: ScriptArgs):
     _set_half_host_env()
     U.exec_command_cpu(
         f"source {args.sglang_env_script} && "
-        "SGLANG_TPU_PD_COLOCATED=1 python3 -m sglang.launch_server "
+        # SGLANG_EXPOSE_OWN_ENV_VARS lets `train` check the engine's SGLANG_TPU_ACTIVATION_FP32 against its own flag
+        "SGLANG_TPU_PD_COLOCATED=1 SGLANG_EXPOSE_OWN_ENV_VARS=1 "
+        f"SGLANG_TPU_ACTIVATION_FP32={int(args.activation_in_fp32)} "
+        "python3 -m sglang.launch_server "
         f"--model-path {args.model_dir}/{MODEL_NAME} "
         "--device tpu "
         "--dtype bfloat16 "
@@ -225,6 +231,8 @@ def _execute(args: ScriptArgs):
         # headroom under the fixed shape: rebalancing the packed microbatches can exceed the packing budget
         f"--max-tokens-per-gpu {SEQ_LEN - 1024} "
     )
+    if args.activation_in_fp32:
+        train_backend_args += "--activation-in-fp32 "
 
     misc_args = (
         "--actor-num-nodes 1 "
