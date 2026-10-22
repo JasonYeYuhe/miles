@@ -1,6 +1,7 @@
 import asyncio
+import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
@@ -112,6 +113,11 @@ class TestConstructorSamplingOwnership:
             TrainClient=TrainClient,
         )
         monkeypatch.setattr(verifiers_rollout, "_import_verifiers", lambda: runtime)
+        renderers = ModuleType("renderers")
+        renderers.base = ModuleType("renderers.base")
+        renderers.base.MODEL_RENDERER_MAP = {}
+        monkeypatch.setitem(sys.modules, "renderers", renderers)
+        monkeypatch.setitem(sys.modules, "renderers.base", renderers.base)
         adapter = object.__new__(verifiers_rollout.VerifiersRolloutFn)
         with pytest.raises(SdkReached):
             adapter.__init__(RolloutFnConstructorInput(args=args, data_source=object()))
