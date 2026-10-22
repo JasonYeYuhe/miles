@@ -40,7 +40,8 @@ class CalibrationRun:
         self.engines = self.store.records[Stream.TOPOLOGY][-1].engines
         self.metrics = sorted(self.store.records[Stream.METRICS], key=lambda record: record.ts)
         self.data_buffer = self.store.records[Stream.DATA_BUFFER]
-        self.phases = _drop_never_closed(self.store.phase_events())
+        # the raw rows, open markers included: replay pushes each through the sink as written
+        self.phases = _drop_never_closed(self.store.iter_records(Stream.PHASES))
         # a step logs several rollout/step records; its dump lands with the first
         self.consume_ts_by_rollout_id = {}
         for record in self.metrics:
