@@ -13,7 +13,9 @@ class TestTorchTitanWorkerClass:
         """TorchTitan trainer specifications retain their native actor after configuration slicing."""
         monkeypatch.setattr(torch, "__version__", "2.13.0")
         monkeypatch.setenv("NVTE_FP8_BLOCK_SCALING_FP32_SCALES", "0")
-        config = parse_fsdp_test_config("--train-backend", "torchtitan")
+        config = parse_fsdp_test_config(
+            "--train-backend", "torchtitan", "--seq-length", "32", "--rollout-max-response-len", "16"
+        )
         worker_config = compute_trainer_config(config, config.raw_megatron.trainers[0])
 
         spec = TrainerSpec.create(worker_config)
