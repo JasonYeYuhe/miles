@@ -95,13 +95,17 @@ def _init_worker(
         )
     config = parse_megatron_test_config(*flags)
     trainer = next(item for item in config.raw_megatron.trainers if item.role == role)
-    args = compute_trainer_config(config, trainer)
+    args = compute_trainer_config(config, trainer).model_copy(
+        update={"clear_quantized_weight_workspaces_on_offload": False}
+    )
     worker = object.__new__(actor_module.MegatronTrainRayActor)
     worker._init_once = InitOnce("MegatronTrainRayActor")
     worker._heartbeat = Mock()
     worker._rank = 0
     sdk = _InitSdk(args=args, iteration=iteration, failure=failure)
     _install_process_environment(actor_module=actor_module, args=args, monkeypatch=monkeypatch)
+    monkeypatch.setattr(actor_module, "print_memory", lambda *args, **kwargs: None)
+    monkeypatch.setattr(actor_module, "clear_memory", lambda *args, **kwargs: None)
     monkeypatch.setattr(model, "get_model", sdk.get_model)
     monkeypatch.setattr(checkpoint, "_load_checkpoint_megatron", sdk.load_checkpoint)
     monkeypatch.setattr(checkpoint_transfer, "PGTransport", sdk.create_transport)

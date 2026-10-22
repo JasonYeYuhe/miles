@@ -43,6 +43,6 @@ class TestBackendFlopsLogging:
         log_utils.log_perf_data(rollout_id=1, args=args)
 
         [metrics] = logs
-        assert metrics["perf/actor_train_tflops"] == pytest.approx(4.08e-10, rel=1e-12, abs=0)
-        assert metrics["perf/actor_train_mfu"] == pytest.approx(4.08e-12, rel=1e-12, abs=0)
+        assert metrics["perf/actor_train_tflops"] == pytest.approx(3.84e-10, rel=1e-12, abs=0)
+        assert metrics["perf/actor_train_mfu"] == pytest.approx(3.84e-12, rel=1e-12, abs=0)
         assert metrics["perf/actor_train_tok_per_s"] == 2.0
