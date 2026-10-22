@@ -1,6 +1,7 @@
+import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
@@ -153,6 +154,12 @@ def _args(kind: str, **overrides: Any) -> TrainerConfig:
 
 
 def _patch_sdks(monkeypatch: pytest.MonkeyPatch) -> tuple[dict[str, Any], SimpleNamespace]:
+    te = ModuleType("transformer_engine")
+    te_pytorch = ModuleType("transformer_engine.pytorch")
+    te.pytorch = te_pytorch
+    te_pytorch.fp8_model_init = None
+    monkeypatch.setitem(sys.modules, "transformer_engine", te)
+    monkeypatch.setitem(sys.modules, "transformer_engine.pytorch", te_pytorch)
     calls: dict[str, Any] = {}
     config = SimpleNamespace(
         hidden_size=8,
