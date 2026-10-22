@@ -79,7 +79,18 @@ class TestTypedModelHooks:
         """The initialization hook merges plugin and backend fields after the SDK tokenizer mutation completes."""
         hook = _hook()
         args = make_trainer_config(
-            custom_megatron_init_path=hook, data_parallel_size=1, deterministic_mode=False, tp_comm_overlap=False
+            custom_megatron_init_path=hook,
+            enable_experimental=False,
+            rank=0,
+            rampup_batch_size=None,
+            global_batch_size=1,
+            micro_batch_size=1,
+            data_parallel_size=1,
+            decrease_batch_size_if_needed=False,
+            deterministic_mode=False,
+            tp_comm_overlap=False,
+            indep_dp=False,
+            debug_deterministic_collective=False,
         )
         for name in (
             "set_args",
