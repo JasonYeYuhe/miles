@@ -60,7 +60,7 @@ def _quantize_fused_qkv(args, name, weight, shards, weight_block_size):
     """Each shard gets its own FP8 blocks, the last row block of a shard left partial."""
     assert weight.shape[0] % shards == 0, f"{name}: {weight.shape[0]} rows do not split into {shards} shards"
     shard_rows = weight.shape[0] // shards
-    pieces = [_quantize_param(args, name, shard, weight_block_size) for shard in weight.chunk(shards)]
+    pieces = [_quantize_param(args, name, shard, weight_block_size, [], {}) for shard in weight.chunk(shards)]
     (_, _), (scale_name, first_scale) = pieces[0]
     # Either scale layout stacks along rows, which is how SGLang slices the shards back: fp32 holds one
     # row per 128-row block of a shard, the DeepGEMM UE8M0 layout (int32, Blackwell) one row per weight row.
