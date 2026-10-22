@@ -95,7 +95,7 @@ def _persistent_trainer_args(**values: Any) -> Any:
 
     from miles.backends.megatron_utils.checkpoint_request import CHECKPOINT_LOAD_FIELDS
 
-    args = make_trainer_args(**{ "spec": None, **values})
+    args = make_trainer_args(**{"spec": None, **values})
     args.backend = type(args.backend)(
         **{
             name: value
