@@ -34,6 +34,11 @@ class ActorLayout:
     # a ref model pass (--use-kl-loss) adds ref_log_probs / ref_entropy
     with_ref: bool
 
+    def dp_size(self, train_gpus: int) -> int:
+        model_parallel_gpus = self.tp_size * self.pp_size * self.cp_size
+        assert train_gpus % model_parallel_gpus == 0, f"{train_gpus} train GPUs do not divide into {self} replicas"
+        return train_gpus // model_parallel_gpus
+
 
 class TrainDumpWriter:
     """Train dumps at the widened actor layout: one file per (DP, CP)
@@ -44,9 +49,7 @@ class TrainDumpWriter:
         self.dump_args = dump_args
         self.out = out
         self.layout = layout
-        model_parallel_gpus = layout.tp_size * layout.pp_size * layout.cp_size
-        assert train_gpus % model_parallel_gpus == 0, f"{train_gpus} train GPUs do not divide into {layout} replicas"
-        self.dp_size = train_gpus // model_parallel_gpus
+        self.dp_size = layout.dp_size(train_gpus)
         self.train_parallel_config = TrainParallelConfig(
             dp_size=self.dp_size,
             cp_size=layout.cp_size,

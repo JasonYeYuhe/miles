@@ -36,6 +36,7 @@ class CalibrationRun:
         self.dump_dir = dump_dir
         self.store = MetricStore.load(dump_dir / "dashboard")
         self.lanes = self.store.lane_index()
+        self.train_gpus = sum(1 for lane in self.lanes if Role.TRAIN.value in lane["roles"])
         self.engines = self.store.records[Stream.TOPOLOGY][-1].engines
         self.metrics = sorted(self.store.records[Stream.METRICS], key=lambda record: record.ts)
         self.data_buffer = self.store.records[Stream.DATA_BUFFER]

@@ -38,11 +38,6 @@ def generate(args: argparse.Namespace) -> None:
         f"{(calibration.end_ts - calibration.start_ts) / 3600:.1f} h -> x{replicas} = {args.gpus} GPUs for {args.hours} h",
         flush=True,
     )
-    args.out.mkdir(parents=True)
-    for name in ("tokenizer", "events"):
-        if (calibration.dump_dir / name).is_dir():
-            shutil.copytree(calibration.dump_dir / name, args.out / name)
-    started = time.monotonic()
     actor_layout = (
         None
         if args.no_train_dumps
@@ -54,6 +49,13 @@ def generate(args: argparse.Namespace) -> None:
             with_ref=any(event.name == "ref_log_probs" for event in calibration.phases),
         )
     )
+    if actor_layout is not None:
+        actor_layout.dp_size(calibration.train_gpus * replicas)  # fail before anything is written to --out
+    args.out.mkdir(parents=True)
+    for name in ("tokenizer", "events"):
+        if (calibration.dump_dir / name).is_dir():
+            shutil.copytree(calibration.dump_dir / name, args.out / name)
+    started = time.monotonic()
     replay = Replay(
         calibration,
         replicas=replicas,

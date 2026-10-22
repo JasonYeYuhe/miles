@@ -153,7 +153,7 @@ class Replay:
             self.dump_args.global_batch_size = self.dump_args.rollout_batch_size * self.dump_args.n_samples_per_prompt
             self.dump_args.use_dynamic_batch_size = True
             self.dump_args.max_tokens_per_gpu = actor_layout.max_tokens_per_gpu
-        train_gpus = sum(1 for lane in calibration.lanes if Role.TRAIN.value in lane["roles"]) * replicas
+        train_gpus = calibration.train_gpus * replicas
         self.train_dump_writer = (
             None
             if actor_layout is None
