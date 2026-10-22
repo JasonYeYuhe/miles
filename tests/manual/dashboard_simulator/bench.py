@@ -295,10 +295,11 @@ def bench_collector(metrics_page: Path, *, engines: int, duration_s: float, push
         wall_start = time.monotonic()
         collector.set_router("http://router:30000")
         push_seconds = []
-        batch_rows = max(1, push_rows_per_s * 5 // 128)  # one sampler batch per node per 5 s, 128 nodes
+        # one sampler batch per node per 5 s, 128 nodes; a zero rate is the scrape-only baseline
+        batch_rows = max(1, push_rows_per_s * 5 // 128) if push_rows_per_s else 0
         while time.monotonic() - wall_start < duration_s:
             tick = time.monotonic()
-            for node in range(128):
+            for node in range(128 if batch_rows else 0):
                 batch = [
                     GpuSample(ts=time.time(), node=f"n{node}", gpu=i % 8, util=50, mem_mb=1, power_w=1)
                     for i in range(batch_rows)
