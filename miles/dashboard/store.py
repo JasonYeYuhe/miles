@@ -265,12 +265,13 @@ def _hour_bounds(key: str) -> tuple[float, float]:
     return float(start), float(start + 3600)
 
 
-def _read_complete_lines(path: Path, offset: int) -> bytes:
-    """The newline-terminated lines appended to ``path`` past ``offset``. A
-    line still being written is left for a later read once its writer ends it."""
+def _read_complete_lines(path: Path, offset: int, end: int | None = None) -> bytes:
+    """The newline-terminated lines of ``path`` in [offset, end) (to EOF
+    without ``end``). A line still being written is left for a later read once
+    its writer ends it."""
     with open(path, "rb") as f:
         f.seek(offset)
-        appended = f.read()
+        appended = f.read() if end is None else f.read(end - offset)
     return appended[: appended.rfind(b"\n") + 1]
 
 
@@ -397,13 +398,20 @@ class _AppendCursor:
 
     def appended(self) -> Iterator[tuple[Path, int, bytes]]:
         """(path, offset, complete lines) per partition that grew since the last
-        call. A partition's offset advances only once the consumer's loop body
-        returns, so a fold that raises re-reads the same bytes next time."""
-        for key, path in self._reader.files():
+        call, oldest partition first. A partition's offset advances only once the
+        consumer's loop body returns, so a fold that raises re-reads the same
+        bytes next time.
+
+        Sizes are taken newest partition first, then read up to: flush writes
+        partitions oldest first, so a row in a newer partition is never read
+        before the older-partition rows written ahead of it (a phase's open
+        marker ahead of its close across an hour boundary)."""
+        sizes = [(key, path, path.stat().st_size) for key, path in reversed(self._reader.files())]
+        for key, path, size in reversed(sizes):
             offset = self._offsets.get(key, 0)
-            if path.stat().st_size <= offset:
+            if size <= offset:
                 continue
-            complete_lines = _read_complete_lines(path, offset)
+            complete_lines = _read_complete_lines(path, offset, size)
             if complete_lines:
                 yield path, offset, complete_lines
             self._offsets[key] = offset + len(complete_lines)

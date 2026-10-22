@@ -325,3 +325,35 @@ def test_iter_records_returns_every_phase_row_as_written(tmp_path):
     store = MetricStore.load(tmp_path)
     assert [event.t1 for event in store.iter_records(Stream.PHASES)] == [PhaseEvent.OPEN_T1, BASE + 20]
     assert [event.t1 for event in store.phase_events()] == [BASE + 20]
+
+
+def test_close_landing_mid_read_in_a_newer_partition_still_pairs_its_open(tmp_path, monkeypatch):
+    """A flush between reading hour 0 and hour 1 writes an open marker into
+    hour 0 and its close into hour 1: the close must not be read before its
+    open, or the open stays in the index forever."""
+    import miles.dashboard.store as store_module
+
+    writer = MetricStore(tmp_path)
+    writer.write_meta(Meta(run_name="race", start_ts=BASE, args={}))
+    for t0 in (BASE + 10, BASE + HOUR + 10):
+        writer.append(PhaseEvent(name="actor_train", t0=t0, t1=t0 + 5, node="n", gpus=[0], rank=0, role=Role.TRAIN))
+    writer.flush()
+    store = MetricStore.load(tmp_path)
+
+    crossing = dict(name="train_wait", t0=BASE + HOUR - 1, node="n", gpus=[1], rank=1, role=Role.TRAIN)
+    read = store_module._read_complete_lines
+    flushed = []
+
+    def flush_after_reading_hour_0(path, *args):
+        lines = read(path, *args)
+        if path.stem == _hour_key(BASE) and not flushed:
+            flushed.append(True)
+            writer.append(PhaseEvent(**crossing, t1=PhaseEvent.OPEN_T1))
+            writer.append(PhaseEvent(**crossing, t1=BASE + HOUR + 1))
+            writer.flush()
+        return lines
+
+    monkeypatch.setattr(store_module, "_read_complete_lines", flush_after_reading_hour_0)
+    store.open_phase_events()
+    assert flushed
+    assert store.open_phase_events() == []
