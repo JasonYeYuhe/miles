@@ -1,0 +1,12 @@
+base: megatron
+base_sha256: 01f9d972132386ad695927105ab2940b723c62e042cd18c7b3336ac790dda62d
+edits:
+- at: 638
+  delete: 1
+  insert: |2
+      max_tokens_per_gpu: 4096
+- at: 1779
+  delete: 2
+  insert: |2
+      use_dynamic_batch_size: true
+      use_dynamic_global_batch_size: true

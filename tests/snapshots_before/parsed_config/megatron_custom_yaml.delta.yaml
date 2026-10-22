@@ -1,0 +1,23 @@
+base: megatron
+base_sha256: 01f9d972132386ad695927105ab2940b723c62e042cd18c7b3336ac790dda62d
+edits:
+- at: 138
+  delete: 1
+  insert: |2
+      critic_lr: 9.0e-06
+- at: 154
+  delete: 1
+  insert: |2
+      custom_config_path: $FIXTURES/custom.yaml
+- at: 307
+  delete: 1
+  insert: |2
+      eps_clip: 0.31
+- at: 309
+  delete: 1
+  insert: |2
+      eps_clip_high: 0.31
+- at: 607
+  delete: 1
+  insert: |2
+      lr: 9.0e-06

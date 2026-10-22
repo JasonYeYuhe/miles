@@ -1,0 +1,27 @@
+base: megatron
+base_sha256: 01f9d972132386ad695927105ab2940b723c62e042cd18c7b3336ac790dda62d
+edits:
+- at: 76
+  delete: 1
+  insert: |2
+      check_weight_transfer_checksum: true
+- at: 78
+  delete: 1
+  insert: |2
+      check_weight_update_equal: true
+- at: 102
+  delete: 1
+  insert: |2
+      ci_test: true
+- at: 561
+  delete: 1
+  insert: |2
+      log_inference_engine_weight_checksums: true
+- at: 1123
+  delete: 1
+  insert: |2
+      sample_ownership_grace_steps: 2
+- at: 1127
+  delete: 1
+  insert: |2
+      save_debug_event_data: $FIXTURES/events

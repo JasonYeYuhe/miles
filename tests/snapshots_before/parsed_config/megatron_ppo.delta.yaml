@@ -1,0 +1,28 @@
+base: megatron
+base_sha256: 01f9d972132386ad695927105ab2940b723c62e042cd18c7b3336ac790dda62d
+edits:
+- at: 18
+  delete: 1
+  insert: |2
+      advantage_estimator: ppo
+- at: 140
+  delete: 2
+  insert: |2
+      critic_num_gpus_per_node: 1
+      critic_num_nodes: 1
+- at: 232
+  delete: 1
+  insert: |2
+      disable_grad_buffers_cpu_backup: true
+- at: 235
+  delete: 1
+  insert: |2
+      disable_param_buffers_cpu_backup: true
+- at: 840
+  delete: 1
+  insert: |2
+      offload_train: true
+- at: 1774
+  delete: 1
+  insert: |2
+      use_critic: true

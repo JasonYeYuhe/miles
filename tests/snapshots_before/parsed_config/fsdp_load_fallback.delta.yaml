@@ -1,0 +1,20 @@
+base: fsdp
+base_sha256: 66639602934a3fc6986039afbc9059f12e979e4889f292375385690c8d5823aa
+edits:
+- at: 63
+  delete: 1
+  insert: |2
+      critic_load: $FIXTURES/missing
+- at: 191
+  delete: 1
+  insert: |2
+      load: $FIXTURES/missing
+- at: 305
+  delete: 2
+  insert: |2
+      ref_ckpt_step: 7
+      ref_load: $FIXTURES/ref
+- at: 309
+  delete: 1
+  insert: |2
+      requested_load: $FIXTURES/missing

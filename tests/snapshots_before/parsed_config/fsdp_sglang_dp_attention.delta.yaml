@@ -1,0 +1,23 @@
+base: fsdp
+base_sha256: 66639602934a3fc6986039afbc9059f12e979e4889f292375385690c8d5823aa
+edits:
+- at: 332
+  delete: 1
+  insert: |2
+      rollout_num_gpus_per_engine: 2
+- at: 370
+  delete: 1
+  insert: |2
+      router_dp_aware: true
+- at: 565
+  delete: 1
+  insert: |2
+      sglang_dp_size: 2
+- at: 592
+  delete: 1
+  insert: |2
+      sglang_enable_dp_attention: true
+- at: 961
+  delete: 1
+  insert: |2
+      sglang_tp_size: 2

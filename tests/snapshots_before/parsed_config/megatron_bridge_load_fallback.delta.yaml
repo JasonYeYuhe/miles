@@ -1,0 +1,32 @@
+base: megatron
+base_sha256: 01f9d972132386ad695927105ab2940b723c62e042cd18c7b3336ac790dda62d
+edits:
+- at: 137
+  delete: 1
+  insert: |2
+      critic_load: $FIXTURES/ref
+- at: 382
+  delete: 1
+  insert: |2
+      finetune: false
+- at: 553
+  delete: 1
+  insert: |2
+      load: $FIXTURES/ref
+- at: 649
+  delete: 1
+  insert: |2
+      megatron_to_hf_mode: bridge
+- at: 794
+  delete: 2
+  insert: |2
+      no_load_optim: null
+      no_load_rng: null
+- at: 936
+  delete: 1
+  insert: |2
+      ref_load: $FIXTURES/ref
+- at: 945
+  delete: 1
+  insert: |2
+      requested_load: $FIXTURES/missing

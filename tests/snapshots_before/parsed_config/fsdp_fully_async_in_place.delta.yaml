@@ -1,0 +1,27 @@
+base: fsdp
+base_sha256: 66639602934a3fc6986039afbc9059f12e979e4889f292375385690c8d5823aa
+edits:
+- at: 70
+  delete: 0
+  insert: |2
+      custom_async_data_buffer_path_per_model: null
+- at: 135
+  delete: 1
+  insert: |2
+      eval_function_path: miles.rollout.fully_async_rollout.FullyAsyncRolloutFn
+- at: 166
+  delete: 1
+  insert: |2
+      fully_async: true
+- at: 257
+  delete: 1
+  insert: |2
+      namespaced_radix_cache: true
+- at: 290
+  delete: 1
+  insert: |2
+      pause_generation_mode: in_place
+- at: 322
+  delete: 1
+  insert: |2
+      rollout_function_path: miles.rollout.fully_async_rollout.FullyAsyncRolloutFn

@@ -1,0 +1,15 @@
+base: fsdp
+base_sha256: 66639602934a3fc6986039afbc9059f12e979e4889f292375385690c8d5823aa
+edits:
+- at: 1
+  delete: 1
+  insert: |2
+      actor_num_gpus_per_node: 4
+- at: 109
+  delete: 1
+  insert: |2
+      dp_replicate_size: 2
+- at: 1061
+  delete: 1
+  insert: |2
+      world_size: 4

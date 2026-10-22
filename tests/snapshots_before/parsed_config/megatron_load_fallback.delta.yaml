@@ -1,0 +1,24 @@
+base: megatron
+base_sha256: 01f9d972132386ad695927105ab2940b723c62e042cd18c7b3336ac790dda62d
+edits:
+- at: 116
+  delete: 1
+  insert: |2
+      ckpt_step: 7
+- at: 137
+  delete: 1
+  insert: |2
+      critic_load: $FIXTURES/ref
+- at: 553
+  delete: 1
+  insert: |2
+      load: $FIXTURES/ref
+- at: 935
+  delete: 2
+  insert: |2
+      ref_ckpt_step: 7
+      ref_load: $FIXTURES/ref
+- at: 945
+  delete: 1
+  insert: |2
+      requested_load: $FIXTURES/missing

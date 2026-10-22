@@ -1,0 +1,19 @@
+base: megatron
+base_sha256: 01f9d972132386ad695927105ab2940b723c62e042cd18c7b3336ac790dda62d
+edits:
+- at: 142
+  delete: 1
+  insert: |2
+      critic_save: $FIXTURES/save_critic
+- at: 1125
+  delete: 1
+  insert: |2
+      save: $FIXTURES/save
+- at: 1127
+  delete: 1
+  insert: |2
+      save_debug_event_data: $FIXTURES/save/events
+- at: 1133
+  delete: 1
+  insert: |2
+      save_interval: 2

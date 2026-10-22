@@ -1,0 +1,19 @@
+base: fsdp
+base_sha256: 66639602934a3fc6986039afbc9059f12e979e4889f292375385690c8d5823aa
+edits:
+- at: 55
+  delete: 1
+  insert: |2
+      cluster_backend: kubernetes
+- at: 248
+  delete: 1
+  insert: |2
+      mooncake_store_init_kwargs: {master_server_address: 'localhost:50051'}
+- at: 265
+  delete: 1
+  insert: |2
+      object_store_backend: mooncake
+- at: 1059
+  delete: 1
+  insert: |2
+      worker_comm_backend: rpc

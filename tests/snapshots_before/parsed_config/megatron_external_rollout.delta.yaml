@@ -1,0 +1,12 @@
+base: megatron
+base_sha256: 01f9d972132386ad695927105ab2940b723c62e042cd18c7b3336ac790dda62d
+edits:
+- at: 158
+  delete: 1
+  insert: |2
+      custom_inference_engine_provider_path: miles.ray.rollout.external_engine_provider.static_inference_engine_provider
+- at: 990
+  delete: 2
+  insert: |2
+      rollout_external: true
+      rollout_external_engine_addrs: ['127.0.0.1:30000']

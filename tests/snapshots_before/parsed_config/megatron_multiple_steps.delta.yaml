@@ -1,0 +1,31 @@
+base: megatron
+base_sha256: 01f9d972132386ad695927105ab2940b723c62e042cd18c7b3336ac790dda62d
+edits:
+- at: 315
+  delete: 1
+  insert: |2
+      eval_global_batch_size: 4
+- at: 422
+  delete: 1
+  insert: |2
+      global_batch_size: 4
+- at: 438
+  delete: 1
+  insert: |2
+      grpo_std_normalization: true
+- at: 789
+  delete: 1
+  insert: |2
+      n_samples_per_prompt: 2
+- at: 827
+  delete: 1
+  insert: |2
+      num_steps_per_rollout: 2
+- at: 869
+  delete: 1
+  insert: |2
+      over_sampling_batch_size: 4
+- at: 987
+  delete: 1
+  insert: |2
+      rollout_batch_size: 4

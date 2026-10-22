@@ -1,0 +1,15 @@
+base: megatron
+base_sha256: 01f9d972132386ad695927105ab2940b723c62e042cd18c7b3336ac790dda62d
+edits:
+- at: 202
+  delete: 1
+  insert: |2
+      debug_train_only: true
+- at: 1003
+  delete: 1
+  insert: |2
+      rollout_num_gpus: 0
+- at: 1693
+  delete: 1
+  insert: |2
+      starts_inference_engines: false
