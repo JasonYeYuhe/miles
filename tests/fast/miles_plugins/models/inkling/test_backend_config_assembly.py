@@ -8,7 +8,6 @@ import torch
 from tests.fast.fixtures.args_fixtures import make_trainer_config
 
 
-
 class TestInklingBackendAssembly:
     @pytest.mark.parametrize("enabled", [False, True])
     def test_provider_builds_the_real_transformer_config_from_backend_fields(

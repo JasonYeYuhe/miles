@@ -4,7 +4,6 @@ import pytest
 from tests.fast.fixtures.args_fixtures import make_trainer_config
 
 
-
 class TestInklingMultimodalProviderConfig:
     def test_multimodal_provider_applies_the_supplied_context_parallel_constraint_before_loading_assets(
         self, inkling_model: ModuleType

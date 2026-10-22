@@ -4,7 +4,6 @@ from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
 
-
 def test_provider_preserves_varlen_default_when_backend_omits_the_field(
     tmp_path: Path, inkling_model: ModuleType
 ) -> None:

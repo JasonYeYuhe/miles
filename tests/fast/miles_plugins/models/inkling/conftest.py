@@ -18,7 +18,13 @@ def inkling_model(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     engine = ModuleType("transformer_engine")
     engine.pytorch = ModuleType("transformer_engine.pytorch")
     layers = ModuleType("miles_plugins.models.inkling.layers")
-    for name in ("InklingDenseMLP", "InklingMoELayer", "InklingRouter", "InklingSelfAttention", "InklingSharedExperts"):
+    for name in (
+        "InklingDenseMLP",
+        "InklingMoELayer",
+        "InklingRouter",
+        "InklingSelfAttention",
+        "InklingSharedExperts",
+    ):
         setattr(layers, name, _unexpected_gpu_call)
     monkeypatch.setitem(sys.modules, "transformer_engine", engine)
     monkeypatch.setitem(sys.modules, "transformer_engine.pytorch", engine.pytorch)
