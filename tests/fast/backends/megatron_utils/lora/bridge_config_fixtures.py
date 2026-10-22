@@ -1,6 +1,8 @@
+import sys
 from argparse import Namespace
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from transformers import LlamaConfig
@@ -37,10 +39,7 @@ class _DdpConfig:
 
 
 @pytest.fixture
-def bridge_provider(monkeypatch: pytest.MonkeyPatch) -> _Provider:
-    from megatron.bridge import AutoBridge
-    from megatron.bridge.training import config
-    from megatron.bridge.utils import fusions
+def bridge_provider(monkeypatch: pytest.MonkeyPatch, bridge_sdk: Mock) -> _Provider:
 
     provider = _Provider()
     bridge = SimpleNamespace(
@@ -48,9 +47,15 @@ def bridge_provider(monkeypatch: pytest.MonkeyPatch) -> _Provider:
         _model_bridge=SimpleNamespace(),
         hf_pretrained=object(),
     )
-    monkeypatch.setattr(AutoBridge, "from_hf_pretrained", lambda *args, **kwargs: bridge)
-    monkeypatch.setattr(config, "DistributedDataParallelConfig", _DdpConfig)
-    monkeypatch.setattr(fusions, "validate_rope_fusion_compatibility", lambda provider: False)
+    bridge_sdk.from_hf_pretrained.return_value = bridge
+    config = ModuleType("megatron.bridge.training.config")
+    config.DistributedDataParallelConfig = _DdpConfig
+    fusions = ModuleType("megatron.bridge.utils.fusions")
+    fusions.validate_rope_fusion_compatibility = lambda provider: False
+    conversion = ModuleType("megatron.bridge.models.conversion.model_bridge")
+    conversion._megatron_local_name_to_global = Mock(side_effect=AssertionError("No model weights are converted"))
+    for module in (config, fusions, conversion):
+        monkeypatch.setitem(sys.modules, module.__name__, module)
     return provider
 
 

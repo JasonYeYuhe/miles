@@ -1,5 +1,7 @@
+import sys
 from dataclasses import dataclass, field
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
+from unittest.mock import Mock
 from typing import Any
 
 import pytest
@@ -22,8 +24,7 @@ class _OptimizerConstruction:
 
 
 @pytest.fixture
-def optimizer_construction(monkeypatch: pytest.MonkeyPatch) -> _OptimizerConstruction:
-    from megatron.bridge.peft import multi_lora_layers
+def optimizer_construction(monkeypatch: pytest.MonkeyPatch, bridge_sdk: Mock) -> _OptimizerConstruction:
 
     from miles.backends.megatron_utils.lora import optimizer
 
@@ -52,7 +53,12 @@ def optimizer_construction(monkeypatch: pytest.MonkeyPatch) -> _OptimizerConstru
         )
         return construction.inner
 
-    monkeypatch.setattr(multi_lora_layers, "MultiLoRALinear", _MultiLoRALinear)
+    peft = ModuleType("megatron.bridge.peft")
+    multi_lora_layers = ModuleType("megatron.bridge.peft.multi_lora_layers")
+    multi_lora_layers.MultiLoRALinear = _MultiLoRALinear
+    peft.multi_lora_layers = multi_lora_layers
+    for module in (peft, multi_lora_layers):
+        monkeypatch.setitem(sys.modules, module.__name__, module)
     monkeypatch.setattr(optimizer, "get_megatron_optimizer", build)
     monkeypatch.setattr(optimizer, "LayerWiseDistributedOptimizer", wrap)
     monkeypatch.setattr(optimizer.ProcessGroupCollection, "use_mpu_process_groups", lambda: object())
