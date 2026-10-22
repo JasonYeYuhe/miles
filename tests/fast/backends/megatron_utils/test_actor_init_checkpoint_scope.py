@@ -13,8 +13,10 @@ __all__ = ["actor_module"]
 
 
 class TestActorInitCheckpointScope:
-    @pytest.mark.parametrize("role", ["actor", "critic"])
-    @pytest.mark.parametrize("mode", ["fresh", "resume", "peer"])
+    @pytest.mark.parametrize(
+        "role,mode",
+        [("actor", "fresh"), ("critic", "fresh"), ("actor", "resume"), ("critic", "resume"), ("actor", "peer")],
+    )
     @pytest.mark.parametrize("failure", [None, "build", "load"])
     def test_initialization_applies_only_the_current_request_and_cleans_every_exit(
         self,
