@@ -16,7 +16,9 @@ class TestRawBackendTraitTransport:
         config = (
             parse_megatron_test_config("--lr", "0.003")
             if backend == "megatron"
-            else parse_fsdp_test_config("--train-backend", backend, "--lr", "0.003")
+            else parse_fsdp_test_config(
+                "--train-backend", backend, "--lr", "0.003", "--rollout-max-response-len", "128"
+            )
         )
         sliced = component.slice_from(config)
 
