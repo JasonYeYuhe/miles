@@ -30,13 +30,15 @@ _FOLLOW_REDRAW_S = 5.0  # views_timeline.js FOLLOW_REDRAW_MS
 @contextmanager
 def serve(dump_details: Path, *, port: int, follow: bool):
     """A ``miles.dashboard.serve`` process with a fresh summary cache; yields (pid, startup_s)."""
+    cache_dir = Path(tempfile.mkdtemp(prefix="dashboard_simulator_cache_"))
     command = [
         sys.executable, "-m", "miles.dashboard.serve", "--dump-details", str(dump_details),
-        "--port", str(port), "--cache-dir", tempfile.mkdtemp(prefix="dashboard_simulator_cache_"),
+        "--port", str(port), "--cache-dir", str(cache_dir),
     ]  # fmt: skip
-    server = subprocess.Popen(
-        command + (["--follow"] if follow else []), stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
-    )
+    # a file, not a pipe: nothing reads stderr while the server runs, and a full pipe would block its writes
+    stderr_path = cache_dir / "serve.stderr"
+    with open(stderr_path, "wb") as stderr:
+        server = subprocess.Popen(command + (["--follow"] if follow else []), stdout=subprocess.DEVNULL, stderr=stderr)
     started = time.perf_counter()
     try:
         while True:
@@ -44,7 +46,7 @@ def serve(dump_details: Path, *, port: int, follow: bool):
                 timed_get(port, "/api/meta")
                 break
             except OSError:
-                assert server.poll() is None, server.stderr.read().decode()[-3000:]
+                assert server.poll() is None, stderr_path.read_text()[-3000:]
                 time.sleep(0.2)
         yield server.pid, time.perf_counter() - started
     finally:
