@@ -422,8 +422,9 @@ class _PhaseIndex:
     partition: intervals still open (a stall can be older than any window),
     intervals closed after more than ``longer_than_s`` (the close lands past
     any window's upper slack), and each phase's most recent closed durations
-    (the stall baseline: a phase every rank is stuck in stops closing, so a
-    trailing window of closes would empty out).
+    up to ``longer_than_s`` (the stall baseline: a phase every rank is stuck in
+    stops closing, so a trailing window of closes would empty out; a longer
+    close is a stall that ended, not a sample of the phase's usual length).
 
     Each partition's bytes are folded in once and later calls read only what
     was appended. An open marker always lands before its close: the sink
@@ -460,8 +461,8 @@ class _PhaseIndex:
             return [*self._open_event_by_line.values(), *self._long_closed_event_by_interval_key.values()]
 
     def recent_closed_durations(self, *, since_t0: float) -> dict[str, list[float]]:
-        """Each phase's last ``RECENT_CLOSES_PER_PHASE`` closed durations, of
-        intervals that began at or after ``since_t0``."""
+        """Each phase's last ``RECENT_CLOSES_PER_PHASE`` closed durations up to
+        ``longer_than_s``, of intervals that began at or after ``since_t0``."""
         with self._lock:
             self._fold_appended()
             return {
@@ -481,9 +482,10 @@ class _PhaseIndex:
                     continue
                 self._open_line_by_interval_key.pop(interval_key, None)
                 t0, duration = float(interval_key[1]), float(t1_bytes) - float(interval_key[1])
-                closes.append((interval_key[0], t0, duration))
                 if duration > self._longer_than_s:
                     self._long_closed_event_by_interval_key[interval_key] = PhaseEvent.from_dict(json.loads(line))
+                else:
+                    closes.append((interval_key[0], t0, duration))
             for raw_name, t0, duration in closes:
                 self._recent_closes_by_raw_name[raw_name].append((t0, duration))
 

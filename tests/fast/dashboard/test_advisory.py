@@ -474,3 +474,21 @@ def test_stall_on_every_rank_keeps_its_baseline(tmp_path):
 
     [advisory] = compute_advisories(MetricStore.load(tmp_path))
     assert advisory.level == "critical" and "train_wait" in advisory.message
+
+
+def test_earlier_long_stalls_do_not_raise_the_baseline(tmp_path):
+    """Four 5 h stalls that ended are not the phase's usual length: a new
+    stall is judged against its 10 s closes."""
+    writer = MetricStore(tmp_path)
+    writer.write_meta(Meta(run_name="long-stalls", start_ts=0.0, args={}))
+    hour = 3600.0
+    for i in range(4):
+        writer.append(_phase("train_wait", i * 6 * hour, i * 6 * hour + 5 * hour))
+    for i in range(3):
+        writer.append(_phase("train_wait", 24 * hour + 20.0 * i, 24 * hour + 20.0 * i + 10.0))
+    writer.append(_phase("train_wait", 24 * hour + 100.0, PhaseEvent.OPEN_T1))
+    writer.append(GpuSample(ts=24 * hour + 2100.0, node="n1", gpu=0, util=0, mem_mb=1, power_w=1))
+    writer.flush()
+
+    [advisory] = compute_advisories(MetricStore.load(tmp_path))
+    assert advisory.level == "critical" and "train_wait" in advisory.message

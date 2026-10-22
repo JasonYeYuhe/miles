@@ -91,7 +91,8 @@ def _stall_advisories(store: MetricStore) -> list[Advisory]:
     old its marker. The median comes from the phase's most recent closes in
     this attempt however long ago: when every rank is stuck in one phase it
     stops closing, and a baseline from a trailing window would empty out and
-    drop the alarm."""
+    drop the alarm. Closes longer than ``MAX_WINDOW_S`` are earlier stalls,
+    left out so they cannot raise the baseline past the next one."""
     time_range = store.time_range()
     if time_range is None:
         return []
