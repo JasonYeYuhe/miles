@@ -126,6 +126,16 @@ jobs:
         with:
           ref: ${{ inputs.plan_already_resolved && inputs.ref || needs.plan.outputs.ref }}
 
+      # Local actions load from the checked-out tree, and the ref under test may predate
+      # them (/rerun-test on an old PR head, release CI on a release branch); take them
+      # from the commit this workflow runs from.
+      - name: Checkout CI actions
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .ci-actions
+          sparse-checkout: .github/actions
+
       - name: Configure source paths
         shell: bash
         run: echo "PYTHONPATH=$GITHUB_WORKSPACE:$SGLANG_SOURCE_ROOT:$MEGATRON_SOURCE_ROOT" >> "$GITHUB_ENV"
@@ -192,7 +202,7 @@ jobs:
       - name: Resolve dependency refs
         if: ${{ !inputs.skip_dependency_install }}
         id: resolve-refs
-        uses: ./.github/actions/resolve-dependency-refs
+        uses: ./.ci-actions/.github/actions/resolve-dependency-refs
         with:
           megatron_ref: ${{ github.event.inputs.ci_megatron_pr || '' }}
           sglang_ref: ${{ github.event.inputs.ci_sglang_pr || '' }}
