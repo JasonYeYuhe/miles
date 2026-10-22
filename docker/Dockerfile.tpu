@@ -15,7 +15,7 @@ FROM lmsysorg/sglang:${SGLANG_TPU_IMAGE_TAG}
 ARG SGLANG_TPU_REPO=sgl-project/sglang-torchtpu
 # the release plus the stacked sgl-project/sglang-torchtpu#1578, #1579, #1580 and #1609 (checksum, fp32 SiLU,
 # prefill capture skip, MoE weight reload); fetched by SHA, which GitHub serves from the PR refs. Drop it for
-# a release image tag once they ship. .github/workflows/tpu-contract.yml tests this commit.
+# a release image tag once they ship.
 ARG SGLANG_TPU_COMMIT=b493ae0fd17bf4852235e2b0da54af1c6ef03518
 ARG TORCH_VERSION=2.14.1
 ARG TORCHVISION_VERSION=0.29.1
