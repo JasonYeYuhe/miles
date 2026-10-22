@@ -447,9 +447,10 @@ def compute_trainer_checkpoint_dir(*, base_dir: str | None, trainer_id: str) -> 
     return str(Path(base_dir) / TRAINER_CHECKPOINT_DIRNAME / trainer_id)
 
 
-def resolve_args_checkpoint_load(args: Namespace) -> None:
+def resolve_args_checkpoint_load(args: Namespace) -> bool:
     # TODO: refactor
     args.requested_load = args.load
+    resume_from_ckpt = has_megatron_checkpoint(args.load)
 
     explicit_selection = args.ckpt_step is not None or args.exit_on_missing_checkpoint
     if explicit_selection:
@@ -475,6 +476,8 @@ def resolve_args_checkpoint_load(args: Namespace) -> None:
         if args.ref_ckpt_step is not None:
             args.ckpt_step = args.ref_ckpt_step
         args.start_rollout_id = 0
+
+    return resume_from_ckpt
 
 
 def has_megatron_checkpoint(load_dir: str | None, ckpt_step: int | None = None) -> bool:
