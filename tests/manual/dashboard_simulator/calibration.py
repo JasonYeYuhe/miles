@@ -94,25 +94,33 @@ class CalibrationRun:
         for rollout_id in self.rollout_ids:
             trajectories = []
             samples = self.load_samples(rollout_id)
+            # one trajectory per session, as the sink records it: the leaves of
+            # a session share a slot, and attempt_end takes all of them at once
+            leaves_by_slot = defaultdict(list)
             for slot, sample in zip(sample_slots(samples), samples, strict=True):
-                if events := sorted(recorded_events_by_index.get(sample["index"], []), key=lambda e: e.ts):
+                leaves_by_slot[slot].append(sample)
+            for slot, leaves in leaves_by_slot.items():
+                last_leaf = leaves[-1]
+                if events := sorted(recorded_events_by_index.get(last_leaf["index"], []), key=lambda e: e.ts):
                     trajectory = CalibrationTrajectory(
                         slot=slot,
-                        status=sample["status"],
+                        status=last_leaf["status"],
                         lifecycle=[],
-                        last_weight_version=_last_weight_version(sample),
+                        last_weight_version=_last_weight_version(last_leaf),
                         attempt_start_ts=events[0].ts,
                         attempt_end_ts=events[-1].ts,
                         recorded_events=tuple(events),
                     )
                 else:
-                    lifecycle = _lifecycle_segments(sample["metadata"]["lifecycle"])
+                    lifecycle = [
+                        segment for leaf in leaves for segment in _lifecycle_segments(leaf["metadata"]["lifecycle"])
+                    ]
                     first_request_ts = min(segment.get("req_ts") or segment["t0"] for segment in lifecycle)
                     trajectory = CalibrationTrajectory(
                         slot=slot,
-                        status=sample["status"],
+                        status=last_leaf["status"],
                         lifecycle=lifecycle,
-                        last_weight_version=_last_weight_version(sample),
+                        last_weight_version=_last_weight_version(last_leaf),
                         attempt_start_ts=first_request_ts - rng.choice(attempt_start_offsets),
                         attempt_end_ts=max(segment["t1"] for segment in lifecycle),
                     )
