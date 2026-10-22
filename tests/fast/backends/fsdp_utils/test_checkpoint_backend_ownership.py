@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 from tests.fast.backends.fsdp_utils.checkpoint_fixtures import cpu_checkpoint_actor
+from torch.distributed.checkpoint.api import CheckpointException
 
 from miles.backends.fsdp_utils import checkpoint
 from miles.backends.fsdp_utils.config import FsdpArgsNamespace
@@ -12,7 +13,20 @@ __all__ = ["cpu_checkpoint_actor"]
 
 
 class TestBackendCheckpointOwnership:
-    @pytest.mark.parametrize("save_optimizer", [False, True])
+    @pytest.mark.parametrize(
+        "save_optimizer",
+        [
+            pytest.param(
+                False,
+                marks=pytest.mark.xfail(
+                    strict=True,
+                    raises=CheckpointException,
+                    reason="Existing checkpoint load requires absent optimizer or scheduler metadata after no-save-optim",
+                ),
+            ),
+            True,
+        ],
+    )
     @pytest.mark.parametrize("load_optimizer", [False, True])
     def test_checkpoint_roundtrip_obeys_backend_optimizer_options_and_restores_progress(
         self, cpu_checkpoint_actor: SimpleNamespace, tmp_path: Path, save_optimizer: bool, load_optimizer: bool
@@ -28,7 +42,10 @@ class TestBackendCheckpointOwnership:
             ckpt_step=None,
         )
         saved_weight = actor.model.weight.detach().clone()
-        checkpoint.save(actor=actor, iteration=6)
+        try:
+            checkpoint.save(actor=actor, iteration=6)
+        except CheckpointException as error:
+            raise AssertionError("Checkpoint save must succeed before exercising missing optimizer metadata") from error
         step = tmp_path / "iter_0000007"
         assert (tmp_path / "latest_checkpointed_iteration.txt").read_text() == "7"
         assert (step / "optimizer" / ".metadata").exists() is save_optimizer
@@ -41,7 +58,15 @@ class TestBackendCheckpointOwnership:
         actor.global_step = 0
         actor.micro_step = 0
 
-        payload = checkpoint.load(actor=actor)
+        try:
+            payload = checkpoint.load(actor=actor)
+        except CheckpointException as error:
+            assert not save_optimizer
+            assert set(error.failures) == {0}
+            failure, _ = error.failures[0]
+            assert type(failure) is AssertionError
+            assert failure.args == ("metadata is None",)
+            raise
         checkpoint.finalize_load(actor=actor, checkpoint_payload=payload)
 
         torch.testing.assert_close(actor.model.weight, saved_weight)
