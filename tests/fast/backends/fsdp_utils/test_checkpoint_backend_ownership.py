@@ -45,7 +45,9 @@ class TestBackendCheckpointOwnership:
         try:
             checkpoint.save(actor=actor, iteration=6)
         except CheckpointException as error:
-            raise AssertionError("Checkpoint save must succeed before exercising missing optimizer metadata") from error
+            raise AssertionError(
+                "Checkpoint save must succeed before exercising missing optimizer metadata"
+            ) from error
         step = tmp_path / "iter_0000007"
         assert (tmp_path / "latest_checkpointed_iteration.txt").read_text() == "7"
         assert (step / "optimizer" / ".metadata").exists() is save_optimizer
