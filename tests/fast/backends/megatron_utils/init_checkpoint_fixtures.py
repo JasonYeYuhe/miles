@@ -89,6 +89,8 @@ def _init_worker(
                 "1024",
                 "--non-persistent-ckpt-type",
                 "local",
+                "--non-persistent-local-ckpt-dir",
+                str(path / "local"),
                 "--non-persistent-local-ckpt-algo",
                 "atomic",
             ]
