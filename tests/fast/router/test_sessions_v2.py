@@ -63,7 +63,7 @@ def _serve_router(extra_args: dict | None = None):
             "pause_generation_mode": "retract",
             "session_sample_picker_path": "miles.rollout.session.v2.picker_hub.drop_same_prompt_retries",
             "session_sample_postprocessor_path": "miles.rollout.session.v2.postprocessor_hub.default_postprocess",
-            "use_miles_router": False,
+            "router": "sglang",
             "sglang_router_policy": "manual",
         }
         args_values.update(extra_args or {})

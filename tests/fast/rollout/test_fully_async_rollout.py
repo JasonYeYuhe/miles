@@ -117,7 +117,7 @@ def make_args(**overrides) -> Namespace:
         sglang_router_ip="127.0.0.1",
         sglang_router_port=30000,
         sglang_router_request_timeout_secs=14400,
-        use_miles_router=False,
+        router="sglang",
         eval_num_gpus=0,
         namespaced_radix_cache=True,
     )

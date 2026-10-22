@@ -24,6 +24,7 @@ from miles.backends.sglang_utils.arguments import validate_args as sglang_valida
 from miles.dashboard.args import add_dashboard_arguments, validate_dashboard_args
 from miles.ray.specs.train import compute_trainer_ids, external_trainer_controller_addrs
 from miles.rollout.checkpoint_eval import is_checkpoint_eval_fn
+from miles.router.backend import RouterKind
 from miles.utils.audit_utils.event_logger.logger import EVENTS_DIRNAME
 from miles.utils.chat_template_utils.tito_tokenizer import TITOTokenizerType
 from miles.utils.env_report.launcher_report import LAUNCHER_REPORT_ENV_VAR
@@ -2005,10 +2006,17 @@ def get_miles_extra_args_provider(add_custom_arguments=None):
 
         def add_router_arguments(parser):
             parser.add_argument(
+                "--router",
+                choices=[kind.value for kind in RouterKind],
+                default=RouterKind.SGLANG.value,
+                help="The router in front of each model's inference engines: sgl-router or the Miles router.",
+            )
+            parser.add_argument(
                 "--use-miles-router",
-                action="store_true",
-                default=False,
-                help="Whether to use MilesRouter for text-based routing instead of SGLang token-based routing",
+                dest="router",
+                action="store_const",
+                const=RouterKind.MILES.value,
+                help="Alias for --router miles.",
             )
             parser.add_argument(
                 "--miles-router-timeout",

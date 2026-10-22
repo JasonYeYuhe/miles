@@ -153,6 +153,29 @@ class TestAddArgumentsSupport:
             get_miles_extra_args_provider()(parser)
 
 
+class TestRouterFlag:
+    @staticmethod
+    def _parse(extra: list[str]) -> argparse.Namespace:
+        with patch.object(sys, "argv", ["test", *extra, *REQUIRED_ARGS]):
+            parser = argparse.ArgumentParser()
+            get_miles_extra_args_provider()(parser)
+            args, _ = parser.parse_known_args()
+        return args
+
+    @pytest.mark.parametrize(
+        ("extra", "expected"),
+        [([], "sglang"), (["--router", "miles"], "miles"), (["--use-miles-router"], "miles")],
+        ids=["default", "router-flag", "alias"],
+    )
+    def test_the_alias_selects_the_same_router_as_the_flag(self, extra: list[str], expected: str):
+        """Existing launchers pass --use-miles-router; it must land in the one field the backend reads."""
+        assert self._parse(extra).router == expected
+
+    def test_an_unknown_router_is_rejected_at_parse_time(self):
+        with pytest.raises(SystemExit):
+            self._parse(["--router", "dynamo"])
+
+
 class TestFullyAsyncDataBufferFlags:
     def test_a_fully_async_run_reaches_the_data_buffer_flags_through_its_rollout_function(self):
         """The flag sits beside --custom-async-data-buffer-path, so a fully async run parses it like any other."""

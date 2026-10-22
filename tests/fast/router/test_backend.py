@@ -12,13 +12,13 @@ def test_every_router_kind_has_its_own_backend():
 
 
 @pytest.mark.parametrize(
-    "use_miles_router, policy, expected",
+    "router, policy, expected",
     [
-        (False, "consistent_hashing", {"X-SMG-Routing-Key": "key-1"}),
-        (False, "manual", {"X-SMG-Routing-Key": "key-1"}),
-        (False, "cache_aware", {}),
-        (False, None, {}),
-        (True, "manual", {}),
+        ("sglang", "consistent_hashing", {"X-SMG-Routing-Key": "key-1"}),
+        ("sglang", "manual", {"X-SMG-Routing-Key": "key-1"}),
+        ("sglang", "cache_aware", {}),
+        ("sglang", None, {}),
+        ("miles", "manual", {}),
     ],
     ids=[
         "sgl-router-consistent-hashing",
@@ -28,15 +28,15 @@ def test_every_router_kind_has_its_own_backend():
         "miles-router",
     ],
 )
-def test_a_routing_key_header_is_sent_only_to_a_router_that_reads_it(use_miles_router, policy, expected):
-    backend = make_router_backend(Namespace(use_miles_router=use_miles_router, sglang_router_policy=policy))
+def test_a_routing_key_header_is_sent_only_to_a_router_that_reads_it(router, policy, expected):
+    backend = make_router_backend(Namespace(router=router, sglang_router_policy=policy))
 
     assert backend.routing_headers("key-1") == expected
 
 
 def test_a_key_routed_request_without_a_key_is_rejected():
     """Without the header a key policy falls back to an implicit key and can pin every request to one engine."""
-    backend = make_router_backend(Namespace(use_miles_router=False, sglang_router_policy="manual"))
+    backend = make_router_backend(Namespace(router="sglang", sglang_router_policy="manual"))
 
     with pytest.raises(ValueError, match="routes by routing key"):
         backend.routing_headers(None)

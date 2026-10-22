@@ -18,7 +18,7 @@ def make_args(**overrides) -> Namespace:
         sglang_router_ip="10.0.0.1",
         sglang_router_port=30000,
         sglang_router_policy=None,
-        use_miles_router=False,
+        router="sglang",
         rollout_num_gpus=4,
         rollout_num_gpus_per_engine=2,
         eval_num_gpus=1,

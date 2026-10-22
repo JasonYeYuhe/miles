@@ -82,7 +82,7 @@ async def test_recompute_samples_flushes_each_batch_and_batches_prefill_score(mo
         recompute_logprobs_via_prefill=True,
         sglang_enable_lora=False,
         sglang_router_policy="round_robin",
-        use_miles_router=False,
+        router="sglang",
     )
     calls = []
 
@@ -125,7 +125,7 @@ async def test_recompute_samples_batches_by_logprob_start_len(monkeypatch):
         recompute_logprobs_via_prefill=True,
         sglang_enable_lora=False,
         sglang_router_policy="round_robin",
-        use_miles_router=False,
+        router="sglang",
     )
     calls = []
 
