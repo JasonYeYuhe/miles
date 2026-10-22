@@ -6,9 +6,14 @@ import pytest
 import torch
 from tests.fast.utils.test_utils.fault_injector.fakes import _arm_marker_hook
 
+from miles.utils.audit_utils.event_logger.models import WeightTransferFailedEvent
 from miles.utils.test_utils.fault_injector.actions.base import FaultHookContext
 from miles.utils.test_utils.fault_injector.controller import fault_hook_controller
 from miles.utils.test_utils.fault_injector.models import FaultHookName
+
+
+def _write_threads_module(mooncake_module: ModuleType) -> ModuleType:
+    return sys.modules[mooncake_module.RolloutEngineWriteThreads.__module__]
 
 
 def test_a_weight_of_another_size_on_the_shard_is_never_written(p2p_sender: Any, mooncake_module: ModuleType) -> None:
@@ -118,9 +123,9 @@ class TestNativeFailure:
     ) -> None:
         """A late worker failure must never borrow the active context of a later weight update."""
         events = []
-        monkeypatch.setattr(mooncake_module, "is_event_logger_initialized", lambda: True)
+        monkeypatch.setattr(_write_threads_module(mooncake_module), "is_event_logger_initialized", lambda: True)
         monkeypatch.setattr(
-            mooncake_module,
+            _write_threads_module(mooncake_module),
             "get_event_logger",
             lambda: SimpleNamespace(log=lambda event_type, data, **kwargs: events.append((event_type, data, kwargs))),
         )
@@ -142,7 +147,7 @@ class TestNativeFailure:
 
         assert len(events) == 1
         event_type, data, kwargs = events[0]
-        assert event_type is mooncake_module.WeightTransferFailedEvent
+        assert event_type is WeightTransferFailedEvent
         assert (data["debug_weight_update_id"], data["cell_id"], data["workers_hash"]) == (
             "old",
             "cell-a",
@@ -165,8 +170,10 @@ class TestNativeFailure:
         def fail_log(*args: Any, **kwargs: Any) -> None:
             raise ValueError("logger unavailable")
 
-        monkeypatch.setattr(mooncake_module, "is_event_logger_initialized", lambda: True)
-        monkeypatch.setattr(mooncake_module, "get_event_logger", lambda: SimpleNamespace(log=fail_log))
+        monkeypatch.setattr(_write_threads_module(mooncake_module), "is_event_logger_initialized", lambda: True)
+        monkeypatch.setattr(
+            _write_threads_module(mooncake_module), "get_event_logger", lambda: SimpleNamespace(log=fail_log)
+        )
         tensor = torch.ones(4)
         shard = make_remote_shard()
         transport.register_memory(tensor)
