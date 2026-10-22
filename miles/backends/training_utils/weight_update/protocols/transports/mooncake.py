@@ -8,7 +8,6 @@ import torch
 
 from miles.backends.training_utils.weight_update.protocols.transports.remote_shard import (
     RemoteShard,
-    RemoteWeightLocation,
     query_remote_shards,
 )
 from miles.backends.training_utils.weight_update.protocols.transports.rollout_engine_write_threads import (
@@ -45,9 +44,7 @@ class MooncakeTransport:
     ) -> dict[str, dict[int, list[RemoteShard]]]:
         """Return assigned shards by runner role and rollout rank."""
         self._write_threads.restart()
-        return query_remote_shards(
-            cell_updaters_of_cell_id, engine_cell_ids, assignments, runner_roles, _build_remote_shard
-        )
+        return query_remote_shards(cell_updaters_of_cell_id, engine_cell_ids, assignments, runner_roles, _connect_peer)
 
     def register_memory(self, tensor: torch.Tensor) -> None:
         ret = self._transfer_engine.register_memory(tensor.data_ptr(), tensor.nbytes)
@@ -96,25 +93,10 @@ class MooncakeTransport:
             raise RuntimeError(f"Mooncake batch_transfer_sync_write returned {ret}")
 
 
-def _build_remote_shard(
-    transfer_engine_info: tuple[str, dict],
-    cell_id: str,
-    rollout_engine_ind: int,
-    rollout_engine_rank: int,
-    runner_role: str,
-) -> RemoteShard:
-    session_id, weights_info = transfer_engine_info
-    assert (
-        session_id is not None
-    ), f"the {runner_role} of rollout engine {rollout_engine_ind} rank {rollout_engine_rank} has no Mooncake session"
-    return RemoteShard(
-        cell_id=cell_id,
-        rollout_engine_ind=rollout_engine_ind,
-        rollout_engine_rank=rollout_engine_rank,
-        runner_role=runner_role,
-        transport_peer=session_id,
-        weight_locations_by_name={name: RemoteWeightLocation(*location) for name, location in weights_info.items()},
-    )
+def _connect_peer(transfer_engine_info: tuple[str, dict]) -> str:
+    session_id, _ = transfer_engine_info
+    assert session_id is not None, "a rollout engine rank published its weights without a Mooncake session"
+    return session_id
 
 
 def _create_transfer_engine() -> Any:

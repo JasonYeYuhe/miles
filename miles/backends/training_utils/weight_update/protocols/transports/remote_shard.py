@@ -40,10 +40,11 @@ def query_remote_shards(
     engine_cell_ids: Sequence[str],
     assignments: Sequence[RolloutEngineRankAssignment],
     runner_roles: Sequence[str],
-    build_remote_shard: Callable[[Any, str, int, int, str], RemoteShard],
+    connect_peer: Callable[[Any], str],
 ) -> dict[str, dict[int, list[RemoteShard]]]:
-    """Return assigned shards by runner role and rollout rank, each built by `build_remote_shard` from the transfer
-    engine info its rollout engine rank published; a rank whose cell returned no info is left out."""
+    """Return assigned shards by runner role and rollout rank, built from the transfer engine info each rollout engine
+    rank published; `connect_peer` turns that info into the shard's transport peer. A rank whose cell returned no info
+    is left out."""
     return {
         runner_role: {
             assignment.rollout_engine_rank: [
@@ -55,7 +56,7 @@ def query_remote_shards(
                         rollout_engine_ind,
                         assignment.rollout_engine_rank,
                         runner_role,
-                        build_remote_shard,
+                        connect_peer,
                     )
                 )
                 is not None
@@ -86,13 +87,19 @@ def _query_remote_shard(
     rollout_engine_ind: int,
     rollout_engine_rank: int,
     runner_role: str,
-    build_remote_shard: Callable[[Any, str, int, int, str], RemoteShard],
+    connect_peer: Callable[[Any], str],
 ) -> RemoteShard | None:
     transfer_engine_info = cell_updater.submit_client_call(
         "get_remote_instance_transfer_engine_info", rank=rollout_engine_rank, role=runner_role
     ).result()
     if transfer_engine_info is None:
         return None
-    return build_remote_shard(
-        transfer_engine_info, cell_updater.cell_id, rollout_engine_ind, rollout_engine_rank, runner_role
+    _, weights_info = transfer_engine_info
+    return RemoteShard(
+        cell_id=cell_updater.cell_id,
+        rollout_engine_ind=rollout_engine_ind,
+        rollout_engine_rank=rollout_engine_rank,
+        runner_role=runner_role,
+        transport_peer=connect_peer(transfer_engine_info),
+        weight_locations_by_name={name: RemoteWeightLocation(*location) for name, location in weights_info.items()},
     )
