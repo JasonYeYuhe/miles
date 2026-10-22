@@ -164,6 +164,10 @@ async def train(args, *, disposer: Disposer):
             break
 
 
-if __name__ == "__main__":
+def main():
     args = parse_args()
     asyncio.run(with_disposer(train, args))
+
+
+if __name__ == "__main__":
+    main()

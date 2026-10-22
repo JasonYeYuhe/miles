@@ -18,6 +18,12 @@ setup(
         "miles.utils.chat_template_utils.templates": ["*.jinja"],
     },
     install_requires=_fetch_requirements("requirements.txt"),
+    entry_points={
+        "console_scripts": [
+            "miles-train = miles.entrypoints.train:main",
+            "miles-train-async = miles.entrypoints.train_async:main",
+        ],
+    },
     extras_require={
         "fsdp": [
             "torch>=2.0",

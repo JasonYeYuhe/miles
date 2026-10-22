@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-import train_async as train_async_driver
 from tests.fast.fixtures.args_fixtures import parser_defaults
 from tests.fast.fixtures.driver_fakes import (
     FakeInferenceController,
@@ -15,6 +14,7 @@ from tests.fast.fixtures.driver_fakes import (
 )
 
 from miles.backends.training_utils.types import TrainStepOutcome, TrainStepOutput
+from miles.entrypoints import train_async as train_async_driver
 from miles.ray import placement_group as placement_group_mod
 from miles.ray import wiring
 from miles.utils import object_store

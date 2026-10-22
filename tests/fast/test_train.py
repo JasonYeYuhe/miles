@@ -3,7 +3,6 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-import train as train_driver
 from tests.fast.fixtures.driver_fakes import (
     FakeInferenceController,
     FakeObjectStore,
@@ -13,6 +12,7 @@ from tests.fast.fixtures.driver_fakes import (
 )
 
 from miles.backends.training_utils.types import TrainStepOutcome, TrainStepOutput
+from miles.entrypoints import train as train_driver
 from miles.ray import placement_group, wiring
 from miles.utils import object_store
 from miles.utils.async_utils import with_disposer

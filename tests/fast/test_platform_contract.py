@@ -21,7 +21,10 @@ _TOOLING_DIRS = (
 
 TRAIN_ONLY_SUBCOMMAND = "train"
 
-ORCHESTRATION_SCRIPTS = ("train.py", "train_async.py")
+ORCHESTRATION_SCRIPTS = (
+    FRAMEWORK_ROOT / "entrypoints" / "train.py",
+    FRAMEWORK_ROOT / "entrypoints" / "train_async.py",
+)
 
 BACKEND_CAPABILITY_FN = "launch_worker_manager"
 ORCHESTRATION_INIT_FN = "init_orchestration_script"
@@ -75,8 +78,7 @@ def _framework_modules() -> list[Path]:
 
 
 def _layered_modules() -> list[Path]:
-    candidates = [*_framework_modules(), *(REPO_ROOT / name for name in ORCHESTRATION_SCRIPTS)]
-    return [path for path in candidates if not _is_exempt(path)]
+    return [path for path in _framework_modules() if not _is_exempt(path)]
 
 
 def _is_exempt(path: Path) -> bool:
@@ -147,10 +149,10 @@ class TestLayering:
 
         assert reaching != [], f"{exemption} no longer reaches upwards: {UPPER_LAYER_EXEMPTIONS[exemption]}"
 
-    @pytest.mark.parametrize("script", ORCHESTRATION_SCRIPTS)
-    def test_an_orchestration_script_initializes_the_shared_driver_exactly_once(self, script: str):
+    @pytest.mark.parametrize("script", ORCHESTRATION_SCRIPTS, ids=lambda path: path.name)
+    def test_an_orchestration_script_initializes_the_shared_driver_exactly_once(self, script: Path):
         """Every driver enters the shared composition root once, or it starts no manager or starts two."""
-        assert len(_calls_of(REPO_ROOT / script, ORCHESTRATION_INIT_FN)) == 1
+        assert len(_calls_of(script, ORCHESTRATION_INIT_FN)) == 1
 
     def test_the_shared_driver_forks_the_backend_exactly_once(self):
         """The whole run hangs off one factory, and a second one would observe the same workers twice."""

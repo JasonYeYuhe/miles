@@ -2,7 +2,7 @@ name: Wheel smoke
 
 # Builds the Miles sdist and wheel, installs the wheel (torchtitan extra) into a clean
 # environment that has no Megatron, and runs tests/ci/wheel_smoke.py: the FSDP and torchtitan
-# entry paths must import and parse their arguments from the installed wheel alone.
+# commands must be installed and their paths must import and parse arguments from the wheel alone.
 #
 # SGLang is a source tree on PYTHONPATH, resolved like every other CI job (ci-sglang-pr:, then
 # release-lock.json, then sglang-miles), until a hosted sglang-miles wheel exists. Its runtime
@@ -71,4 +71,4 @@ jobs:
         working-directory: ${{ runner.temp }}
         env:
           PYTHONPATH: ${{ github.workspace }}/sglang/python
-        run: '"$RUNNER_TEMP/venv/bin/python" "$GITHUB_WORKSPACE/tests/ci/wheel_smoke.py" "$GITHUB_WORKSPACE"'
+        run: '"$RUNNER_TEMP/venv/bin/python" "$GITHUB_WORKSPACE/tests/ci/wheel_smoke.py"'
