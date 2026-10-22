@@ -46,6 +46,7 @@ export REPO_URL=https://github.com/<org>/<repo>
 ./manage-runners.sh list
 ./manage-runners.sh add    --name <host>-4gpu-0 --cvd 0,1,2,3 --hwtype h200 --ngpu 4 --token <REG_TOKEN>
 ./manage-runners.sh add    --name <host>-4gpu-0 --cvd 0,1,2,3 --hwtype h200 --ngpu 4 --token <REG_TOKEN> --tags aliyun
+./manage-runners.sh add    --name <host>-4gpu-0 --cvd 0,1,2,3 --hwtype h200 --ngpu 4 --token <REG_TOKEN> --no-start
 ./manage-runners.sh remove --name <host>-4gpu-0 --token <REG_TOKEN>
 ```
 
@@ -54,6 +55,14 @@ Get `<REG_TOKEN>` from the repo's settings UI:
 The same token is accepted by both `config.sh --token` (register) and
 `config.sh remove --token` (deregister); no separate removal token is
 needed. Tokens expire ~1 hour after issuance.
+
+### Prepare a replacement before starting it
+
+`add --no-start` registers the runner and leaves its container in `created` state. GitHub shows it offline, and no listener starts or accepts jobs. The temporary token file is removed on exit; starting later with `docker start <name>` uses the saved registration without another token. `list` shows running containers only; use `docker ps -a` to inspect a prepared runner. Repeating `add` for that name is refused.
+
+For a swap, keep the replacement stopped until the old runner's active job has finished and the old listener has stopped. Starting the replacement makes its registered labels eligible for scheduling immediately. With `--tags aliyun`, network and hook setup still run during preparation, but the in-container hook check must wait until after `docker start`: follow the check under [Host tags](#host-tags). Preparation alone does not establish runtime or GPU readiness.
+
+`remove --token` starts a stopped container to deregister it and deletes its host directories. Do not use it when the runner must remain stopped or its work and caches must be preserved.
 
 ## Label and CVD convention
 
@@ -106,7 +115,7 @@ With `--tags aliyun`, `add` also:
   non-connected routes on that bond in the `rdma.routes` label;
 * installs [`hooks/aliyun/docker`](hooks/aliyun/docker) under
   `/data/runner-setup/hooks/aliyun`, mounts it read-only first in the runner
-  container's `PATH`, and checks that the runner resolves `docker` to it.
+  container's `PATH`, and checks that the runner resolves `docker` to it when `add` starts the container.
 
 The runner resolves `docker` through `PATH` and runs `docker create`, then
 `docker start <id>`, before any job step. The hook passes every command through
@@ -142,15 +151,7 @@ A few invariants the script encodes that are easy to get wrong by hand:
   per-job containers it spawns need that path, and that bind is declared
   in [`_run-ci.yml`](../../../../.github/workflows/_run-ci.yml) (resolved
   against the HOST filesystem by the daemon).
-* **Token only at registration**: `add` creates the runner container, registers
-  it from a one-shot container that reads the token from a 0600 temporary file
-  (`RUNNER_TOKEN_FILE`, `RUNNER_REGISTER_ONLY`), then starts it, so `docker
-  inspect` never shows a token. An EXIT trap set right after `docker create`
-  deletes the container on any exit until it starts, and a failed start first
-  tries to deregister the runner (a warning names a runner it could not
-  deregister). `add` refuses a runner directory that still holds a
-  registration (run `remove` first), so an image built before these variables
-  fails registration instead of starting a listener.
+* **Token only at registration**: `add` creates the runner container, registers it from a one-shot container that reads the token from a 0600 temporary file (`RUNNER_TOKEN_FILE`, `RUNNER_REGISTER_ONLY`), then starts it unless `--no-start` was given, so `docker inspect` never shows a token. An EXIT trap set right after `docker create` deletes the container on registration or start failure; successful preparation retains it. A failed start first tries to deregister the runner (a warning names a runner it could not deregister). `add` refuses a runner directory that still holds a registration (run `remove` first), so an image built before these variables fails registration instead of starting a listener.
 * **Deregister BEFORE `docker rm -f`**: `config.sh remove --token <TOKEN>`
   inside the container clears the runner from GitHub's UI. Skipping it
   leaves an offline-zombie entry that confuses future operators.

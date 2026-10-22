@@ -25,6 +25,7 @@ CACHE_ROOT=/data/runner-cache
 HOOK_ROOT=/data/runner-setup/hooks
 SKILL_DIR=$(cd "$(dirname "$0")" && pwd)
 DEFAULT_PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+NO_START=false
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -32,7 +33,7 @@ usage() {
   cat >&2 <<EOF
 usage:
   $0 list
-  $0 add    --name NAME --cvd CVD --hwtype HWTYPE --ngpu N --token TOKEN [--tags TAGS]
+  $0 add    --name NAME --cvd CVD --hwtype HWTYPE --ngpu N --token TOKEN [--tags TAGS] [--no-start]
   $0 remove --name NAME [--token TOKEN]
 
 flags:
@@ -46,6 +47,7 @@ flags:
   --token TOKEN    registration token from
                    https://github.com/<org>/<repo>/settings/actions/runners/new
                    (the same token is accepted for config.sh remove)
+  --no-start       add only: register and create the container without starting it
 
 env vars:
   REPO_URL  required for 'add', e.g. export REPO_URL=https://github.com/<org>/<repo>
@@ -63,6 +65,9 @@ parse_flags() {
       --ngpu)   NGPU=$2; shift 2 ;;
       --tags)   TAGS=$2; shift 2 ;;
       --token)  TOKEN=$2; shift 2 ;;
+      --no-start)
+        [ "$COMMAND" = add ] || die "--no-start is only valid for add"
+        NO_START=true; shift ;;
       *) die "unknown flag: $1" ;;
     esac
   done
@@ -135,7 +140,7 @@ cmd_add() {
   )
   # Register through one-shot containers that read the token from a 0600 file,
   # so the runner container never carries it. The trap set right after `docker
-  # create` deletes it on any exit until it starts; a failed start tries to deregister.
+  # create` removes it on registration/start failure; a failed start tries to deregister.
   local token_dir
   token_dir=$(mktemp -d)
   trap "rm -rf '$token_dir'" EXIT
@@ -156,6 +161,12 @@ cmd_add() {
     -v "$token_dir/token:/run/runner-token:ro" -v "$SETUP_ROOT/$NAME:$SETUP_ROOT/$NAME")
   "${oneshot[@]}" -e RUNNER_REGISTER_ONLY=1 "$IMAGE" \
     || die "registration failed; if the output says RUNNER_TOKEN is required, $IMAGE predates RUNNER_TOKEN_FILE: rebuild it"
+  if [ "$NO_START" = true ]; then
+    trap "rm -rf '$token_dir'" EXIT
+    echo "prepared $NAME (cvd=$CVD, labels=$labels); container not started"
+    echo "start when ready with: docker start $NAME"
+    return 0
+  fi
   if ! docker start "$NAME" >/dev/null; then
     "${oneshot[@]}" --entrypoint bash "$IMAGE" -c 'cd "$RUNNER_DIR" && ./config.sh remove --token "$(cat "$RUNNER_TOKEN_FILE")"' \
       || echo "WARN: could not deregister $NAME; delete it in the repository's runner settings" >&2
@@ -200,7 +211,8 @@ cmd_remove() {
   echo "removed container + host dirs for $NAME"
 }
 
-case "${1:-}" in
+COMMAND=${1:-}
+case "$COMMAND" in
   list)   shift; parse_flags "$@"; cmd_list ;;
   add)    shift; parse_flags "$@"; cmd_add ;;
   remove) shift; parse_flags "$@"; cmd_remove ;;
