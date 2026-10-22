@@ -31,6 +31,11 @@ def normalize_record(
     if isinstance(context.source, TrainProcessIdentity):
         if not isinstance(config, dict) or not isinstance(args := config.get("args"), dict):
             raise ValueError("Training snapshots require a config.args object")
+        if context.deploy_component == "standalone" and "local_rank" in args:
+            assert (
+                type(args["local_rank"]) is int and args["local_rank"] == context.source.rank_within_cell
+            ), f"Unexpected standalone local rank: {args['local_rank']!r}"
+            args["local_rank"] = _RANK
         if "rank" in args:
             assert type(args["rank"]) is int and args["rank"] >= 0, f"Unexpected args.rank: {args['rank']!r}"
             args["rank"] = _RANK
@@ -46,6 +51,10 @@ _PATH_FIELDS = frozenset(
         "critic_load",
         "ref_load",
         "dump_details",
+        "tinker_checkpoint_root",
+        "dumper_dir",
+        "dumper_source_patcher_config_train",
+        "dumper_source_patcher_config_inference",
         "save_debug_event_data",
         "save_debug_train_data",
         "save_debug_trajectory_data",
@@ -53,6 +62,11 @@ _PATH_FIELDS = frozenset(
         "load_debug_rollout_data",
         "ci_save_grad_norm",
         "te_precision_config_file",
+        "script_token_ids_file",
+        "script_source_patcher_config",
+        "script_routing_replay_dump_path",
+        "script_routing_replay_load_path",
+        "script_logprob_output",
         "eval_hf_dir",
     }
 )
@@ -66,13 +80,20 @@ def _normalize_generated_values(config: JsonValue, *, values: list[ConfigSnapsho
     if isinstance(result, dict) and isinstance(args := result.get("args"), dict):
         _normalize_endpoints(args, values=values)
     for fields in _config_objects(result):
-        fields.update(
-            {
-                key: _normalize_field(value, key=key, values=values, config=fields)
-                for key, value in fields.items()
-                if isinstance(value, str) and (key in _PATH_FIELDS or key == "wandb_group")
-            }
-        )
+        updates: dict[str, JsonValue] = {}
+        for key, value in fields.items():
+            if key not in _PATH_FIELDS and key != "wandb_group":
+                continue
+            if isinstance(value, str):
+                updates[key] = _normalize_field(value, key=key, values=values, config=fields)
+            elif (
+                key in _PATH_FIELDS
+                and isinstance(value, dict)
+                and set(value) == {"$path"}
+                and isinstance(value["$path"], str)
+            ):
+                updates[key] = {"$path": _normalize_field(value["$path"], key=key, values=values, config=fields)}
+        fields.update(updates)
     return result
 
 
@@ -140,6 +161,8 @@ def _normalize_field(
                 if isinstance(save, str) and value == save.rstrip("/") + "_critic":
                     value = value[: -len(entry.value + "_critic")] + token + "_critic"
             value = "/".join(token if part == entry.value else part for part in value.split("/"))
+        elif entry.kind == "temporary_file" and value == entry.value:
+            value = str(Path(entry.value).parent / token)
         elif entry.kind == "temporary_directory" and (value == entry.value or value.startswith(entry.value + "/")):
             value = str(Path(entry.value).parent / token) + value[len(entry.value) :]
     return value
@@ -165,7 +188,14 @@ def collect_generated_values(
                 key = (entry.kind, entry.name)
                 if observed.setdefault(key, entry) != entry:
                     raise ValueError(f"Conflicting generated snapshot value for {generation}/{key}")
-        result[generation] = list(observed.values())
+        values = []
+        run_index = 0
+        for entry in observed.values():
+            if entry.kind == "run_id" and entry.name.isdecimal():
+                entry = entry.model_copy(update={"name": f"{run_index:04d}"})
+                run_index += 1
+            values.append(entry)
+        result[generation] = values
     return result
 
 

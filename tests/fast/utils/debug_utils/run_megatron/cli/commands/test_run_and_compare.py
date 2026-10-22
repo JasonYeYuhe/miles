@@ -23,21 +23,28 @@ def _make_common_fields(**overrides: object) -> dict[str, object]:
 
 
 class TestRunAndCompare:
+    @pytest.mark.parametrize("capture_name", [None, "tests/e2e/standalone"])
     @patch("miles.utils.debug_utils.run_megatron.cli.commands.run_and_compare.run_impl")
-    def test_calls_run_twice(self, mock_run: MagicMock) -> None:
+    def test_baseline_and_target_keep_distinct_capture_identities(
+        self, mock_run: MagicMock, capture_name: str | None
+    ) -> None:
+        """Baseline and target snapshots cannot overwrite one logical run."""
         _run_baseline_and_target(
             baseline_config=ParallelConfig(tp=1),
             target_config=ParallelConfig(tp=2),
             baseline_output=Path("/tmp/baseline"),
             target_output=Path("/tmp/target"),
             replay_dir=None,
-            common_fields=_make_common_fields(),
+            common_fields=_make_common_fields(config_snapshot_name=capture_name),
             baseline_extra_args="",
             target_extra_args="",
             baseline_logprob_dir=None,
             target_logprob_dir=None,
         )
         assert mock_run.call_count == 2
+        assert [call.args[0].config_snapshot_name for call in mock_run.call_args_list] == (
+            [f"{capture_name}/baseline", f"{capture_name}/target"] if capture_name else [None, None]
+        )
 
     @patch("miles.utils.debug_utils.run_megatron.cli.commands.run_and_compare.run_impl")
     def test_output_dir_uses_dir_name(self, mock_run: MagicMock) -> None:

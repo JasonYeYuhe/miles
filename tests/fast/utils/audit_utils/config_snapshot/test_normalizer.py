@@ -1,15 +1,19 @@
 import os
+from argparse import Namespace
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 
 from miles.utils.audit_utils.config_snapshot.converter import ConfigSnapshotConverter
+from miles.utils.audit_utils.config_snapshot.dumper import ConfigSnapshotDumper
 from miles.utils.audit_utils.config_snapshot.generated_value_registry import (
     GENERATED_VALUES_ENV_VAR,
     generated_value_registry,
 )
 from miles.utils.audit_utils.config_snapshot.models import ConfigSnapshotGeneratedValue
 from miles.utils.audit_utils.config_snapshot.normalizer import normalize_record
+from miles.utils.audit_utils.config_snapshot.storage import ConfigSnapshotStorage
 from miles.utils.audit_utils.process_identity import SimpleProcessIdentity
 from miles.utils.test_utils.snapshot import SNAPSHOT_RECORD_DIR_ENV_VAR, dump_snapshot
 
@@ -51,8 +55,9 @@ class TestGeneratedValueRegistration:
 
 class TestGeneratedPathNormalization:
     @pytest.mark.parametrize("typed_backend", [False, True])
+    @pytest.mark.parametrize("save_first", [False, True])
     def test_derived_critic_save_preserves_parent_and_role_across_generated_runs(
-        self, make_record: Callable, typed_backend: bool
+        self, make_record: Callable, typed_backend: bool, save_first: bool
     ) -> None:
         """Flat and typed checkpoint payloads retain critic identity without generated run suffix drift."""
         for parent in ["/personal/checkpoints", "/other/checkpoints"]:
@@ -61,6 +66,8 @@ class TestGeneratedPathNormalization:
                 save = f"{parent}/{run_id}"
                 config = {"critic_save": save + "_critic"}
                 config.update({"backend": {"save": save + "/"}} if typed_backend else {"save": save + "/"})
+                if save_first:
+                    config = dict(reversed(list(config.items())))
                 record = make_record(config=config).model_copy(
                     update={
                         "generated_values": [ConfigSnapshotGeneratedValue(kind="run_id", name="0000", value=run_id)]
@@ -412,3 +419,220 @@ class TestOtherBackendGeneratedPaths:
         }
         assert normalized["custom"][backend] == fields
         assert record.config["args"][backend] == fields
+
+
+class TestStandaloneGeneratedPaths:
+    def test_only_registered_files_and_directories_in_known_fields_are_normalized(self, make_record: Callable) -> None:
+        """Standalone provenance cannot hide unregistered paths or unrelated user strings."""
+        args = {
+            "script_token_ids_file": "/tmp/tokens-random.json",
+            "script_source_patcher_config": "/tmp/output-random/patch.yaml",
+            "script_logprob_output": "/tmp/output-random/logprobs",
+            "script_routing_replay_dump_path": "/tmp/tokens-random.json/child",
+            "script_routing_replay_load_path": "/tmp/unregistered/route",
+            "custom": "/tmp/tokens-random.json",
+        }
+        record = make_record(config=args).model_copy(
+            update={
+                "generated_values": [
+                    ConfigSnapshotGeneratedValue(
+                        kind="temporary_file", name="tokens", value="/tmp/tokens-random.json"
+                    ),
+                    ConfigSnapshotGeneratedValue(
+                        kind="temporary_directory", name="output", value="/tmp/output-random"
+                    ),
+                ]
+            }
+        )
+
+        assert normalize_record(record) == {
+            "args": {
+                **args,
+                "script_token_ids_file": "/tmp/$TEMPORARY_FILE_tokens",
+                "script_source_patcher_config": "/tmp/$TEMPORARY_DIRECTORY_output/patch.yaml",
+                "script_logprob_output": "/tmp/$TEMPORARY_DIRECTORY_output/logprobs",
+            }
+        }
+        assert record.config == {"args": args}
+
+    def test_real_path_values_keep_their_typed_wrapper_after_storage_and_normalization(
+        self, capture_args: Namespace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Real worker Path fields normalize without erasing their serialized type."""
+        monkeypatch.setattr(
+            generated_value_registry,
+            "_values",
+            [
+                ConfigSnapshotGeneratedValue(kind="temporary_file", name="tokens", value="/tmp/random.json"),
+                ConfigSnapshotGeneratedValue(kind="temporary_directory", name="output", value="/tmp/random-dir"),
+            ],
+        )
+        args = Namespace(
+            script_token_ids_file=Path("/tmp/random.json"),
+            script_source_patcher_config=Path("/tmp/random-dir/patch.yaml"),
+            script_logprob_output=Path("/tmp/random-dir/logprobs"),
+            script_routing_replay_load_path={"$path": "/tmp/random.json", "extra": True},
+            custom=Path("/tmp/random.json"),
+        )
+        ConfigSnapshotDumper.dump(stage="standalone_paths", config={"args": args})
+        record = next(
+            record
+            for record in ConfigSnapshotStorage(directory=tmp_path).read()
+            if record.point.stage == "standalone_paths"
+        )
+
+        assert record.config["args"]["script_token_ids_file"] == {"$path": "/tmp/random.json"}
+        assert normalize_record(record) == {
+            "args": {
+                "script_token_ids_file": {"$path": "/tmp/$TEMPORARY_FILE_tokens"},
+                "script_source_patcher_config": {"$path": "/tmp/$TEMPORARY_DIRECTORY_output/patch.yaml"},
+                "script_logprob_output": {"$path": "/tmp/$TEMPORARY_DIRECTORY_output/logprobs"},
+                "script_routing_replay_load_path": {"$path": "/tmp/random.json", "extra": True},
+                "custom": {"$path": "/tmp/random.json"},
+            }
+        }
+        assert record.config["args"]["script_token_ids_file"] == {"$path": "/tmp/random.json"}
+
+
+class TestDumperGeneratedPaths:
+    @pytest.mark.parametrize("typed_backend", [False, True])
+    @pytest.mark.parametrize("registered", [False, True])
+    def test_registered_dumper_paths_preserve_user_paths_and_similar_prefixes(
+        self, make_record: Callable, typed_backend: bool, registered: bool
+    ) -> None:
+        """Dumper provenance normalizes only registered directories in known configuration fields."""
+        directory = "/tmp/test_miles_dumper_random"
+        fields = {
+            "dumper_dir": directory + "/dumps/mode",
+            "dumper_source_patcher_config_train": directory + "/megatron_source_patcher.yaml",
+            "dumper_source_patcher_config_inference": directory + "/sglang_source_patcher.yaml",
+            "save": directory + "_other/checkpoint",
+            "custom": directory + "/dumps/mode",
+            "load": "/user/checkpoints",
+        }
+        config = {"backend": fields} if typed_backend else fields
+        record = make_record(config=config).model_copy(
+            update={
+                "generated_values": (
+                    [ConfigSnapshotGeneratedValue(kind="temporary_directory", name="dumper", value=directory)]
+                    if registered
+                    else []
+                )
+            }
+        )
+        expected = dict(fields)
+        if registered:
+            expected.update(
+                dumper_dir="/tmp/$TEMPORARY_DIRECTORY_dumper/dumps/mode",
+                dumper_source_patcher_config_train="/tmp/$TEMPORARY_DIRECTORY_dumper/megatron_source_patcher.yaml",
+                dumper_source_patcher_config_inference="/tmp/$TEMPORARY_DIRECTORY_dumper/sglang_source_patcher.yaml",
+            )
+
+        assert normalize_record(record)["args"] == ({"backend": expected} if typed_backend else expected)
+        assert record.config["args"] == config
+
+
+class TestTinkerGeneratedPaths:
+    @pytest.mark.parametrize("typed_backend", [False, True])
+    @pytest.mark.parametrize("registered", [False, True])
+    def test_checkpoint_root_normalizes_only_registered_complete_run_segments(
+        self, make_record: Callable, typed_backend: bool, registered: bool
+    ) -> None:
+        """Tinker checkpoint roots retain user directories and unrelated run-like path segments."""
+        fields = {
+            "tinker_checkpoint_root": "/user/checkpoints/generated-run",
+            "save": "/user/checkpoints/generated-run-other",
+            "load": "/user/checkpoints/unregistered-run",
+            "custom": "/user/checkpoints/generated-run",
+        }
+        config = {"backend": fields} if typed_backend else fields
+        record = make_record(config=config).model_copy(
+            update={
+                "generated_values": (
+                    [ConfigSnapshotGeneratedValue(kind="run_id", name="0000", value="generated-run")]
+                    if registered
+                    else []
+                )
+            }
+        )
+        expected = dict(fields)
+        if registered:
+            expected["tinker_checkpoint_root"] = "/user/checkpoints/$RUN_ID_0000"
+
+        assert normalize_record(record)["args"] == ({"backend": expected} if typed_backend else expected)
+        assert record.config["args"] == config
+
+
+class TestStandaloneLocalRankNormalization:
+    def test_single_node_ranks_merge_without_changing_raw_or_custom_fields(self, make_record: Callable) -> None:
+        """Standalone ranks merge only after validating their local device identity."""
+        records = []
+        for rank in [0, 7]:
+            record = make_record(rank=rank, config={"rank": rank, "local_rank": rank, "custom": {"local_rank": 9}})
+            record = record.model_copy(
+                update={"context": record.context.model_copy(update={"deploy_component": "standalone"})}
+            )
+            records.append(record)
+
+        case = ConfigSnapshotConverter.convert(records)
+
+        process = next(iter(case.processes.values()))
+        assert process.ranks == [0, 7]
+        assert process.base == {"args": {"rank": "$RANK", "local_rank": "$RANK", "custom": {"local_rank": 9}}}
+        assert [record.config["args"]["local_rank"] for record in records] == [0, 7]
+
+    @pytest.mark.parametrize("local_rank", [None, -1, True, 1.5, "1", 0, 2])
+    def test_invalid_or_mismatched_local_rank_is_rejected(self, make_record: Callable, local_rank: object) -> None:
+        """Malformed or incorrect device placement cannot disappear during rank deduplication."""
+        record = make_record(rank=1, config={"rank": 1, "local_rank": local_rank})
+        record = record.model_copy(
+            update={"context": record.context.model_copy(update={"deploy_component": "standalone"})}
+        )
+
+        with pytest.raises(AssertionError, match="Unexpected standalone local rank"):
+            normalize_record(record)
+
+    def test_other_deployments_keep_local_rank_literal(self, make_record: Callable) -> None:
+        """The single-node standalone rule does not change other deployment layouts."""
+        record = make_record(rank=7, config={"local_rank": 1})
+        assert normalize_record(record) == record.config
+
+
+class TestObservedRunIds:
+    def test_unused_registration_does_not_shift_the_used_run_id(self, make_record: Callable) -> None:
+        """Unused CLI defaults cannot change the snapshot of the selected run ID."""
+        record = make_record(config={"tinker_checkpoint_root": "/checkpoints/selected"})
+        original = record.model_copy(
+            update={
+                "generated_values": [
+                    ConfigSnapshotGeneratedValue(kind="run_id", name="0000", value="selected"),
+                ]
+            }
+        )
+        shifted = record.model_copy(
+            update={
+                "generated_values": [
+                    ConfigSnapshotGeneratedValue(kind="run_id", name="0000", value="unused"),
+                    ConfigSnapshotGeneratedValue(kind="run_id", name="0001", value="selected"),
+                ]
+            }
+        )
+        assert dump_snapshot(ConfigSnapshotConverter.convert([original])) == dump_snapshot(
+            ConfigSnapshotConverter.convert([shifted])
+        )
+
+    def test_swapping_used_run_ids_between_paths_remains_visible(self, make_record: Callable) -> None:
+        """Canonical numbering preserves distinct references when both generated IDs are used."""
+        metadata = [
+            ConfigSnapshotGeneratedValue(kind="run_id", name=f"{i:04d}", value=value)
+            for i, value in enumerate(["unused", "first", "second"])
+        ]
+        records = [
+            make_record(config={"save": f"/checkpoints/{a}", "load": f"/checkpoints/{b}"}).model_copy(
+                update={"generated_values": metadata}
+            )
+            for a, b in [("first", "second"), ("second", "first")]
+        ]
+        assert dump_snapshot(ConfigSnapshotConverter.convert([records[0]])) != dump_snapshot(
+            ConfigSnapshotConverter.convert([records[1]])
+        )

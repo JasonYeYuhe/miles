@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 from transformers import AutoTokenizer
 
+from miles.utils.audit_utils.config_snapshot.generated_value_registry import GeneratedValueRegistry
+from miles.utils.debug_utils.run_megatron.cli import prompt_utils
 from miles.utils.debug_utils.run_megatron.cli.prompt_utils import (
     PromptConfig,
     _build_math_sequence,
@@ -14,6 +16,7 @@ from miles.utils.debug_utils.run_megatron.cli.prompt_utils import (
     generate_token_ids,
     write_token_ids_to_tmpfile,
 )
+from miles.utils.test_utils.snapshot import SNAPSHOT_RECORD_DIR_ENV_VAR
 
 QWEN3_MODEL_ID = "Qwen/Qwen3-0.6B"
 
@@ -82,11 +85,23 @@ class TestBuildMathSequence:
 
 
 class TestWriteTokenIdsToTmpfile:
-    def test_roundtrip_json(self) -> None:
+    @pytest.mark.parametrize("capture", [False, True])
+    def test_roundtrip_json_preserves_exact_generated_file_provenance(
+        self, monkeypatch: pytest.MonkeyPatch, capture: bool
+    ) -> None:
+        """Only enabled capture records the actual temporary token filename."""
+        monkeypatch.delenv(SNAPSHOT_RECORD_DIR_ENV_VAR, raising=False)
+        registry = GeneratedValueRegistry()
+        monkeypatch.setattr(prompt_utils, "generated_value_registry", registry)
+        if capture:
+            monkeypatch.setenv(SNAPSHOT_RECORD_DIR_ENV_VAR, "/capture")
         token_ids = [10, 20, 30, 40]
         path = write_token_ids_to_tmpfile(token_ids)
         loaded = json.loads(path.read_text())
         assert loaded == token_ids
+        assert [(entry.kind, entry.value) for entry in registry.read()] == (
+            [("temporary_file", str(path))] if capture else []
+        )
 
     def test_prefix_and_suffix(self) -> None:
         path = write_token_ids_to_tmpfile([1, 2, 3])

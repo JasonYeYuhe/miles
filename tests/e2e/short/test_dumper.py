@@ -29,6 +29,7 @@ from tests.e2e.conftest_dumper import (
     run_and_verify_comparator,
 )
 
+from miles.utils.audit_utils.config_snapshot.generated_value_registry import generated_value_registry
 from miles.utils.external_utils import command_utils
 
 register_cuda_ci(
@@ -44,6 +45,7 @@ MODEL_TYPE = "qwen3-30B-A3B"
 NUM_GPUS = 8
 
 _RUN_DIR: Path = Path(tempfile.mkdtemp(prefix="test_miles_dumper_"))
+generated_value_registry.register(kind="temporary_directory", name="dumper", value=str(_RUN_DIR))
 MEGATRON_SOURCE_PATCHER_CONFIG_PATH: str = str(_RUN_DIR / "megatron_source_patcher.yaml")
 SGLANG_SOURCE_PATCHER_CONFIG_PATH: str = str(_RUN_DIR / "sglang_source_patcher.yaml")
 

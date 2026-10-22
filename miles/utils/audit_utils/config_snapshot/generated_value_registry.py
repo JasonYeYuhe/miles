@@ -20,7 +20,9 @@ class GeneratedValueRegistry:
     def register(
         self,
         *,
-        kind: Literal["run_id", "temporary_directory", "ci_commit_name", "host", "port", "external_host"],
+        kind: Literal[
+            "run_id", "temporary_directory", "temporary_file", "ci_commit_name", "host", "port", "external_host"
+        ],
         value: str,
         name: str | None = None,
     ) -> None:

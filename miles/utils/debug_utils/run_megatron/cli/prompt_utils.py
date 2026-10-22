@@ -6,6 +6,8 @@ import tempfile
 from pathlib import Path
 from typing import Literal
 
+from miles.utils.audit_utils.config_snapshot.generated_value_registry import generated_value_registry
+
 
 @dataclasses.dataclass(frozen=True)
 class PromptConfig:
@@ -57,6 +59,7 @@ def generate_token_ids(
 def write_token_ids_to_tmpfile(token_ids: list[int]) -> Path:
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, prefix="run_megatron_token_ids_") as tmp:
         json.dump(token_ids, tmp)
+    generated_value_registry.register(kind="temporary_file", value=tmp.name)
     return Path(tmp.name)
 
 

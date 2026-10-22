@@ -17,9 +17,7 @@ class TestAutomaticSnapshotNames:
             "--ci-test --config-snapshot-name=explicit",
         ],
     )
-    def test_disabled_and_explicit_names_are_preserved(
-        self, arguments: str, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_disabled_and_explicit_names_are_preserved(self, arguments: str, monkeypatch: pytest.MonkeyPatch) -> None:
         """Automatic naming cannot override an explicit identity or enable disabled capture."""
         monkeypatch.setenv(SNAPSHOT_RECORD_DIR_ENV_VAR, "/snapshot/records")
         monkeypatch.setattr(base_backend, "_CONFIG_SNAPSHOT_LAUNCH_COUNTS", {})

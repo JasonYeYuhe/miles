@@ -8,6 +8,7 @@
 
 
 import dataclasses
+import shlex
 import sys
 import tempfile
 from pathlib import Path
@@ -21,6 +22,7 @@ import typer
 from tests.ci.ci_register import register_cuda_ci, register_rocm_ci
 from tests.e2e.conftest_dumper import MEGATRON_PATCHER_YAMLS, clear_proxy_env
 
+from miles.utils.audit_utils.config_snapshot.generated_value_registry import generated_value_registry
 from miles.utils.debug_utils.run_megatron.cli.parallel_utils import ParallelConfig, parse_parallel_args
 from miles.utils.external_utils import command_utils
 
@@ -120,6 +122,7 @@ def run(
     cmd: str = (
         f"python -m miles.utils.debug_utils.run_megatron run-and-compare "
         f"--model-type {MODEL_TYPE} "
+        "--config-snapshot-name tests/e2e/short/test_run_megatron "
         f"--hf-checkpoint /root/models/{MODEL_NAME} "
         f"--ref-load /root/models/{MODEL_NAME}_torch_dist "
         f"--output-base-dir {dump_dir} "
@@ -136,7 +139,9 @@ def run(
         f"{target_extra_args_part}"
         f"--extra-args '{extra_args}'"
     )
-    _backend().exec_command_gpu(cmd)
+    generated_value_registry.register(kind="temporary_directory", name="standalone-output", value=str(_RUN_DIR))
+    capture_env = " ".join(f"{key}={shlex.quote(value)}" for key, value in generated_value_registry.to_env().items())
+    _backend().exec_command_gpu(f"{capture_env} {cmd}".strip())
 
 
 @app.command()

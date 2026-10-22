@@ -34,13 +34,13 @@ class TestLoggerSnapshotCapture:
 
         records = ConfigSnapshotStorage(directory=tmp_path).read()
         assert sorted(record.context.name for record in records) == (
-            ["first", "second"] if mode == "enabled" else ["first"]
+            ["first", "second"] if mode in {"enabled", "not_ci"} else ["first"]
         )
         assert all(record.point.stage == "process_config" and record.point.index == 0 for record in records)
         first_record = next(record for record in records if record.context.name == "first")
         assert first_record.context.source == SimpleProcessIdentity(component="main")
         assert first_record.config["args"]["run_uuid"] == "snapshot-run"
-        if mode == "enabled":
+        if mode in {"enabled", "not_ci"}:
             second_record = next(record for record in records if record.context.name == "second")
             assert second_record.context.source == SimpleProcessIdentity(component="rollout_executor")
             assert second_record.context.capture_id != first_record.context.capture_id

@@ -1,10 +1,13 @@
 """``run`` and ``show-model-args`` CLI commands."""
 
+import os
+import shlex
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
+from miles.utils.audit_utils.config_snapshot.generated_value_registry import generated_value_registry
 from miles.utils.debug_utils.run_megatron.cli.commands.args import RunArgs
 from miles.utils.debug_utils.run_megatron.cli.parallel_utils import ParallelConfig
 from miles.utils.debug_utils.run_megatron.cli.path_utils import resolve_megatron_path
@@ -21,6 +24,8 @@ from miles.utils.debug_utils.run_megatron.cli.worker_executor import (
 from miles.utils.debug_utils.run_megatron.worker.script_args import WorkerScriptArgs
 from miles.utils.external_utils.command_utils.common import run_shell_command
 from miles.utils.external_utils.model_args_utils import load_model_args
+from miles.utils.run_uuid import generate_run_uuid
+from miles.utils.test_utils.snapshot import SNAPSHOT_RECORD_DIR_ENV_VAR
 from miles.utils.typer_utils import dataclass_cli
 
 
@@ -50,10 +55,13 @@ def run_impl(args: RunArgs) -> None:
     token_ids_file: Path = write_token_ids_to_tmpfile(token_ids)
     print(f"[cli] Token IDs written to {token_ids_file} ({len(token_ids)} tokens)", flush=True)
 
+    capture_name = args.config_snapshot_name if os.environ.get(SNAPSHOT_RECORD_DIR_ENV_VAR) else None
     script_args: WorkerScriptArgs = WorkerScriptArgs(
         hf_checkpoint=args.hf_checkpoint,
         token_ids_file=token_ids_file,
         role=args.role,
+        config_snapshot_name=capture_name,
+        config_snapshot_run_uuid=generate_run_uuid() if capture_name else None,
         ref_load=args.ref_load,
         run_backward=args.run_backward,
         source_patcher_config=args.source_patcher_config,
@@ -76,7 +84,8 @@ def run_impl(args: RunArgs) -> None:
         run_backward=args.run_backward,
         dumper_filter=args.dumper_filter,
     )
-    env_exports: str = " && ".join(f"export {k}='{v}'" for k, v in dumper_env.items())
+    dumper_env.update(generated_value_registry.to_env())
+    env_exports: str = " && ".join(f"export {k}={shlex.quote(v)}" for k, v in dumper_env.items())
 
     cmd: str = build_torchrun_cmd(
         model_type=args.model_type,

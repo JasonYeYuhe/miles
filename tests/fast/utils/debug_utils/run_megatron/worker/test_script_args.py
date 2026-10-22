@@ -23,10 +23,13 @@ class TestWorkerScriptArgs:
         assert args.routing_replay_load_path is None
 
     def test_to_cli_args_roundtrip(self) -> None:
+        """Worker capture identity survives CLI serialization with the model arguments."""
         original = WorkerScriptArgs(
             hf_checkpoint=Path("/hf"),
             token_ids_file=Path("/tokens.json"),
             role="critic",
+            config_snapshot_name="tests/e2e/standalone/baseline",
+            config_snapshot_run_uuid="capture-run-1",
             run_backward=True,
             top_k=5,
         )

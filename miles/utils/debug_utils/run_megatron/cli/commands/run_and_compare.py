@@ -99,7 +99,12 @@ def _run_baseline_and_target(
     print("[cli] Step 1/2: Baseline run", flush=True)
     run_impl(
         RunArgs(
-            **_append_extra_args(common_fields, baseline_extra_args),
+            **{
+                **_append_extra_args(common_fields, baseline_extra_args),
+                "config_snapshot_name": (
+                    f"{name}/baseline" if (name := common_fields.get("config_snapshot_name")) else None
+                ),
+            },
             **dataclasses.asdict(baseline_config),
             output_dir=baseline_output,
             routing_replay_dump_path=replay_dir,
@@ -111,7 +116,12 @@ def _run_baseline_and_target(
     print("[cli] Step 2/2: Target run", flush=True)
     run_impl(
         RunArgs(
-            **_append_extra_args(common_fields, target_extra_args),
+            **{
+                **_append_extra_args(common_fields, target_extra_args),
+                "config_snapshot_name": (
+                    f"{name}/target" if (name := common_fields.get("config_snapshot_name")) else None
+                ),
+            },
             **dataclasses.asdict(target_config),
             output_dir=target_output,
             routing_replay_dump_path=None,

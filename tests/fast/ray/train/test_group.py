@@ -60,6 +60,7 @@ def _make_mock_args(
     # passes self.args through Ray to the remote actor; pickling a MagicMock blows the
     # recursion limit because its __getattr__ creates new sub-mocks indefinitely.
     return SimpleNamespace(
+        ci_disable_config_snapshot=True,
         deploy_component="all",
         trainer_controller_addrs=None,
         api_server_port=0,

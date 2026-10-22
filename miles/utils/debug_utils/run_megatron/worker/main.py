@@ -38,6 +38,7 @@ from miles.utils.debug_utils.run_megatron.worker.replay import (
     setup_replay_before_model,
 )
 from miles.utils.debug_utils.run_megatron.worker.script_args import WORKER_SCRIPT_ARGS_BRIDGE, WorkerScriptArgs
+from miles.utils.debug_utils.run_megatron.worker.snapshot import configure as configure_snapshot
 from miles.utils.debug_utils.run_megatron.worker.top_k_print import print_top_k
 from miles_plugins.models.deepseek_v4.arguments import add_dsv4_arguments
 from miles_plugins.models.glm5.arguments import add_dsa_arguments
@@ -48,6 +49,7 @@ def main() -> None:
     _initialize_megatron(args)
 
     rank: int = dist.get_rank()
+    configure_snapshot(args=args, script=script, rank=rank)
     if rank == 0:
         _print_config(args, script)
 

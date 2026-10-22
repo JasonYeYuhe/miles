@@ -28,6 +28,7 @@ class CommonRunArgs:
     batch_size: int = _field(default=1, help="Micro batch size")
     apply_chat_template: bool = _field(default=False, help="Apply chat template")
     role: str = _field(default="actor", help="Model role: actor / critic")
+    config_snapshot_name: str | None = _field(default=None, help="Runtime configuration snapshot identity")
     source_patcher_config: Path | None = _field(default=None, help="Source patcher YAML config path")
     top_k: int = _field(default=0, help="Print top-k predictions per position (0=disabled)")
     dumper_filter: str = _field(default="", help="Dumper filter expression")

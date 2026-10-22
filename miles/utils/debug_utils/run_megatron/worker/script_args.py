@@ -18,6 +18,8 @@ class WorkerScriptArgs:
     hf_checkpoint: Path
     token_ids_file: Path
     role: str = "actor"
+    config_snapshot_name: str | None = None
+    config_snapshot_run_uuid: str | None = None
     ref_load: Path | None = None
     run_backward: bool = False
     source_patcher_config: Path | None = None

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shlex
+
 from collections.abc import Generator
 from pathlib import Path
 from unittest.mock import patch
@@ -78,12 +80,15 @@ class TestRunImplExecCommand:
         assert "--pipeline-model-parallel-size 2" in cmd
         assert "--nproc-per-node 8" in cmd
 
-    def test_cmd_contains_dumper_env(self) -> None:
-        run_impl(_make_run_args(output_dir=Path("/out/test"), dumper_filter="logits"))
+    @pytest.mark.parametrize("value", ["logits", "path == '$HOME; $(false)' and layer_id is None"])
+    def test_cmd_preserves_dumper_environment_values(self, value: str) -> None:
+        """Shell quoting preserves complete filter values including special characters."""
+        run_impl(_make_run_args(output_dir=Path("/out/test space"), dumper_filter=value))
         cmd = self.mock_exec.call_args[0][0]
-        assert "export DUMPER_ENABLE='1'" in cmd
-        assert "export DUMPER_DIR='/out/test'" in cmd
-        assert "export DUMPER_FILTER='logits'" in cmd
+        env = _exported_env(cmd)
+        assert env["DUMPER_ENABLE"] == "1"
+        assert env["DUMPER_DIR"] == "/out/test space"
+        assert env["DUMPER_FILTER"] == value
 
     def test_cmd_contains_script_args(self) -> None:
         run_impl(_make_run_args(role="critic", top_k=5))
@@ -102,6 +107,12 @@ class TestRunImplExecCommand:
         assert "--use-routing-replay" in cmd
 
     def test_backward_enables_grad_env(self) -> None:
+        """Backward runs export the gradient dumper switch."""
         run_impl(_make_run_args(run_backward=True))
         cmd = self.mock_exec.call_args[0][0]
-        assert "export DUMPER_ENABLE_MODEL_GRAD='1'" in cmd
+        assert _exported_env(cmd)["DUMPER_ENABLE_MODEL_GRAD"] == "1"
+
+
+def _exported_env(command: str) -> dict[str, str]:
+    tokens = shlex.split(command)
+    return dict(tokens[index + 1].split("=", 1) for index, token in enumerate(tokens) if token == "export")
