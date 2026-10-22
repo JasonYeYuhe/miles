@@ -258,6 +258,7 @@ class Replay:
                     self._dump_eval,
                     calibration_rollout_id,
                     calibration_rollout_id + rollout_id_base,
+                    shift_s,
                 )
 
     # --------------------------- telemetry replay ---------------------------
@@ -493,7 +494,7 @@ class Replay:
             self.train_dump_writer.write(rollout_id, samples)
         print(f"  rollout {rollout_id}: {len(samples)} samples dumped", flush=True)
 
-    def _dump_eval(self, ts: float, calibration_rollout_id: int, rollout_id: int) -> None:
+    def _dump_eval(self, ts: float, calibration_rollout_id: int, rollout_id: int, shift_s: float) -> None:
         """Eval batches do not grow with the cluster: replayed once, unwidened."""
         messages_by_key = self.calibration.load_messages(calibration_rollout_id, evaluation=True)
         samples = []
@@ -503,7 +504,7 @@ class Replay:
                 index=calibration_sample["index"],
                 group_index=calibration_sample["group_index"],
                 rollout_id=calibration_sample.get("rollout_id"),
-                shift_s=0.0,
+                shift_s=shift_s,
                 weight_version_shift=rollout_id - calibration_rollout_id,
             )
             if (messages := messages_by_key.get((calibration_sample["index"], 0))) is not None:
