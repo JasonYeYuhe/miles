@@ -1,21 +1,21 @@
 import json
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
 import torch
 from tests.fast.fixtures.args_fixtures import make_trainer_config
 
-from miles_plugins.models.inkling import model
 
 
 class TestInklingBackendAssembly:
     @pytest.mark.parametrize("enabled", [False, True])
     def test_provider_builds_the_real_transformer_config_from_backend_fields(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, enabled: bool
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, enabled: bool, inkling_model: ModuleType
     ) -> None:
         """The real provider and builder preserve backend settings in the allocated model config."""
+        model = inkling_model
         text = dict(
             num_attention_heads=4,
             num_key_value_heads=4,

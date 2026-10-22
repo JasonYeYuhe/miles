@@ -1,19 +1,22 @@
 import inspect
+from types import ModuleType
 
 import pytest
 
 from miles.backends.megatron_utils.checkpoint_request import MegatronCkptLoadConfig
-from miles.backends.torchtitan_utils.actor import TorchtitanTrainRayActor
 
 
 class TestTorchtitanCheckpointRequestRejection:
-    def test_megatron_load_request_is_rejected_before_torchtitan_initialization(self) -> None:
+    def test_megatron_load_request_is_rejected_before_torchtitan_initialization(
+        self, titan_actor_module: ModuleType
+    ) -> None:
         """TorchTitan cannot silently accept Megatron-only runtime loading inputs."""
-        actor = TorchtitanTrainRayActor.__new__(TorchtitanTrainRayActor)
+        actor_type = titan_actor_module.TorchtitanTrainRayActor
+        actor = actor_type.__new__(actor_type)
         original = vars(actor).copy()
 
         with pytest.raises(AssertionError, match="does not support checkpoint healing"):
-            inspect.unwrap(TorchtitanTrainRayActor.init)(
+            inspect.unwrap(actor_type.init)(
                 actor,
                 args=None,
                 role="actor",
