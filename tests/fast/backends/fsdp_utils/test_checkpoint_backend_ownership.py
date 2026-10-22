@@ -36,6 +36,7 @@ class TestBackendCheckpointOwnership:
         with torch.no_grad():
             actor.model.weight.fill_(4)
         actor.optimizer.state.clear()
+        actor.optimizer.zero_grad(set_to_none=True)
         actor.optimizer.param_groups[0]["lr"] = 0.9
         actor.global_step = 0
         actor.micro_step = 0
