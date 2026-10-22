@@ -1,5 +1,5 @@
 processes:
-  ? tests/e2e/megatron/test_glm47_flash/test_spec_mtptrain_nor3_fp8_sgl_tp2_meg_tp1cp1_fullyasync/run-0000/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
+  ? tests/e2e/megatron/test_glm47_flash/test_spec_mtptrain_nor3_fp8_sgl_tp2_meg_tp1cp1_fullyasync/run-0000/all/default/actor_cell00000
   : diffs:
       checkpoint_load-0000: &id001
         set:

@@ -1,6 +1,6 @@
 processes:
-  ? tests/e2e/fsdp/test_qwen3_0.6B_megatron_fsdp_align/run-0000/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : diffs: &id007 {checkpoint_load-0000: {set: {/format: hf, /load: /root/models/Qwen3-0.6B/}}, train_first_step-0000: {set: {
+  tests/e2e/fsdp/test_qwen3_0.6B_megatron_fsdp_align/run-0000/all/default/actor_cell00000:
+    diffs: &id007 {checkpoint_load-0000: {set: {/format: hf, /load: /root/models/Qwen3-0.6B/}}, train_first_step-0000: {set: {
           <<: &id014 {/args/backend/lr_decay_iters: 1, /args/backend/train_iters: 1}, /role: actor}}}
     overrides:
       set:
@@ -136,8 +136,8 @@ processes:
         /args/save_debug_rollout_data: test_rollout_data_megatron_fsdp_align_{rollout_id}.pt
         /args/sglang_scaling: {groups: {default: [{engine_offset: 0, gpu_offset: 0, num_gpus: 2}]}}
     template: inference_controller-01
-  ? tests/e2e/fsdp/test_qwen3_0.6B_megatron_fsdp_align/run-0001/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : diffs: *id007
+  tests/e2e/fsdp/test_qwen3_0.6B_megatron_fsdp_align/run-0001/all/default/actor_cell00000:
+    diffs: *id007
     overrides:
       remove: &id011 [/args/init_expected_num_cells/default]
       set:
@@ -208,8 +208,8 @@ processes:
         /args/save_debug_rollout_data: null
         /args/sglang_scaling: {groups: {}}
     template: inference_controller-01
-  ? tests/e2e/fsdp/test_qwen3_0.6B_megatron_fsdp_align/run-0002/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : diffs:
+  tests/e2e/fsdp/test_qwen3_0.6B_megatron_fsdp_align/run-0002/all/default/actor_cell00000:
+    diffs:
       checkpoint_load-0000:
         set:
           <<: *id014

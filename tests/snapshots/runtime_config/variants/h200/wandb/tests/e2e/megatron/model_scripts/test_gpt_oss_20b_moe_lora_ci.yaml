@@ -1,6 +1,6 @@
 processes:
-  ? tests/e2e/megatron/model_scripts/test_gpt_oss_20b_moe_lora_ci/run-0000/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : <<: &id005
+  tests/e2e/megatron/model_scripts/test_gpt_oss_20b_moe_lora_ci/run-0000/all/default/actor_cell00000:
+    <<: &id005
       diffs:
         checkpoint_load-0000:
           set: {<<: &id001 {/args/backend/lr_decay_iters: 2, /args/backend/train_iters: 2}, /args/backend/ckpt_step: null,
@@ -30,8 +30,8 @@ processes:
   tests/e2e/megatron/model_scripts/test_gpt_oss_20b_moe_lora_ci/run-0000/all/default/worker_manager:
     overrides: *id002
     template: worker_manager-01
-  ? tests/e2e/megatron/model_scripts/test_gpt_oss_20b_moe_lora_ci/run-0001/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : <<: *id005
+  tests/e2e/megatron/model_scripts/test_gpt_oss_20b_moe_lora_ci/run-0001/all/default/actor_cell00000:
+    <<: *id005
     overrides: &id006 {set: {<<: &id007 {/args/config_snapshot_name: tests/e2e/megatron/model_scripts/test_gpt_oss_20b_moe_lora_ci/run-0001,
           /args/sglang/base_args/lora_use_virtual_experts: false, /args/sglang_lora_use_virtual_experts: false}}}
     template: trainer-megatron-02

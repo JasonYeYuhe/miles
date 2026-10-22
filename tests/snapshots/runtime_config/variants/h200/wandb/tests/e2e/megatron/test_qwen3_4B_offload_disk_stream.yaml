@@ -1,6 +1,6 @@
 processes:
-  ? tests/e2e/megatron/test_qwen3_4B_offload_disk_stream/run-0000/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : diffs:
+  tests/e2e/megatron/test_qwen3_4B_offload_disk_stream/run-0000/all/default/actor_cell00000:
+    diffs:
       checkpoint_load-0000: &id001
         set:
           <<: &id002 {/args/backend/lr_decay_iters: 2, /args/backend/model_type: {$enum: megatron.core.enums.ModelType, name: encoder_or_decoder},

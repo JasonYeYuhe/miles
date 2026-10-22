@@ -1,6 +1,6 @@
 processes:
-  ? tests/e2e/precision/test_dsv4_bshd_thd_rollout_parity/run-0000/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : overrides:
+  tests/e2e/precision/test_dsv4_bshd_thd_rollout_parity/run-0000/all/default/actor_cell00000:
+    overrides:
       set:
         <<:
         - &id005 {/args/backend/disable_grad_buffers_cpu_backup: false, /args/backend/disable_param_buffers_cpu_backup: false}
@@ -77,8 +77,8 @@ processes:
   tests/e2e/precision/test_dsv4_bshd_thd_rollout_parity/run-0000/all/default/worker_manager:
     overrides: *id007
     template: worker_manager-01
-  ? tests/e2e/precision/test_dsv4_bshd_thd_rollout_parity/run-0001/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : diffs: &id013
+  tests/e2e/precision/test_dsv4_bshd_thd_rollout_parity/run-0001/all/default/actor_cell00000:
+    diffs: &id013
       checkpoint_load-0000:
         set:
           <<: &id008 {/args/backend/lr_decay_iters: 1, /args/backend/model_type: {$enum: megatron.core.enums.ModelType, name: encoder_or_decoder},
@@ -145,8 +145,8 @@ processes:
         /args/rollout_num_gpus: 0
         /args/save_debug_rollout_data: /tmp/$TEMPORARY_DIRECTORY_dsv4_parity/bshd/dump_details/rollout_data/{rollout_id}.pt
     template: worker_manager-01
-  ? tests/e2e/precision/test_dsv4_bshd_thd_rollout_parity/run-0002/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : diffs: *id013
+  tests/e2e/precision/test_dsv4_bshd_thd_rollout_parity/run-0002/all/default/actor_cell00000:
+    diffs: *id013
     overrides:
       remove: *id010
       set:

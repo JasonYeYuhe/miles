@@ -1,5 +1,5 @@
 processes:
-  tests/e2e/megatron/test_qwen3_4B_ppo/run-0000/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000:
+  tests/e2e/megatron/test_qwen3_4B_ppo/run-0000/all/default/actor_cell00000:
     diffs:
       checkpoint_load-0000: &id001
         set:
@@ -16,7 +16,7 @@ processes:
       train_first_step-0000: {set: {<<: *id002, /role: actor}}
     ranks: [0, 1, 2, 3]
     template: trainer-megatron-02
-  tests/e2e/megatron/test_qwen3_4B_ppo/run-0000/all/default/critic_cell00000/trainer-engine-critic-00000/incarnation-0000:
+  tests/e2e/megatron/test_qwen3_4B_ppo/run-0000/all/default/critic_cell00000:
     diffs:
       checkpoint_load-0000: *id001
       train_first_step-0000: {set: {<<: *id002, /role: critic}}
@@ -148,8 +148,8 @@ processes:
           /args/raw_megatron/base_args/world_size: 4
           /args/raw_megatron/trainers:
           - {actor_index: 0, model_id: null, overrides: {}, role: actor, trainer_id: actor}
-          - {actor_index: null, model_id: null, overrides: {disable_param_buffers_cpu_backup: false, kl_coef: 0, load: null,
-              lr: 1.0e-05, lr_warmup_iters: 0, save: null, use_opd: false}, role: critic, trainer_id: critic}
+          - {actor_index: null, model_id: null, overrides: {disable_param_buffers_cpu_backup: false, kl_coef: 0, lr: 1.0e-05,
+              lr_warmup_iters: 0, save: null, use_opd: false}, role: critic, trainer_id: critic}
           /args/raw_torchtitan: null
     template: main-01
   tests/e2e/megatron/test_qwen3_4B_ppo/run-0000/all/default/rollout_executor:

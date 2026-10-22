@@ -1,5 +1,5 @@
 processes:
-  tests/e2e/fsdp/r3/test_qwen3_5_35b_a3b_r3/run-0000/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000:
+  tests/e2e/fsdp/r3/test_qwen3_5_35b_a3b_r3/run-0000/all/default/actor_cell00000:
     diffs: {checkpoint_load-0000: {set: {/format: hf, /load: /root/models/Qwen3.5-35B-A3B}}, train_first_step-0000: {set: {
           /args/backend/lr_decay_iters: 4, /args/backend/train_iters: 4, /role: actor}}}
     overrides:

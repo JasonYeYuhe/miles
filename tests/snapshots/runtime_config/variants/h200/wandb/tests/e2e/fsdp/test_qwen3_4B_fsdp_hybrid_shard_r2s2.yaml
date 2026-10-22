@@ -1,6 +1,6 @@
 processes:
-  ? tests/e2e/fsdp/test_qwen3_4B_fsdp_hybrid_shard_r2s2/run-0000/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : diffs: {checkpoint_load-0000: {set: {/format: hf, /load: /root/models/Qwen3-4B}}, train_first_step-0000: {set: {/args/backend/lr_decay_iters: 4,
+  tests/e2e/fsdp/test_qwen3_4B_fsdp_hybrid_shard_r2s2/run-0000/all/default/actor_cell00000:
+    diffs: {checkpoint_load-0000: {set: {/format: hf, /load: /root/models/Qwen3-4B}}, train_first_step-0000: {set: {/args/backend/lr_decay_iters: 4,
           /args/backend/train_iters: 4, /role: actor}}}
     ranks: [0, 1, 2, 3]
     template: trainer-fsdp-01

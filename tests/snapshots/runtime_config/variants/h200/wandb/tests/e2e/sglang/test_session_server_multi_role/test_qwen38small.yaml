@@ -1,6 +1,6 @@
 processes:
-  ? tests/e2e/sglang/test_session_server_multi_role/test_qwen38small/run-0000/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : <<: &id012 {diffs: {train_first_step-0000: {set: {/role: actor}}}, ranks: [0, 1]}
+  tests/e2e/sglang/test_session_server_multi_role/test_qwen38small/run-0000/all/default/actor_cell00000:
+    <<: &id012 {diffs: {train_first_step-0000: {set: {/role: actor}}}, ranks: [0, 1]}
     overrides:
       remove: [/args/requested_load]
       set: {<<: [&id009 {/args/backend/kernel_backend: native, /args/backend/kernel_mapping_path: '', /args/backend/kernel_strict: false,
@@ -168,8 +168,8 @@ processes:
           /args/tinker_server_port: 10613
         /args/load: null
     template: trainer-fsdp-02
-  ? tests/e2e/sglang/test_session_server_multi_role/test_qwen38small/run-0001/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : <<: *id012
+  tests/e2e/sglang/test_session_server_multi_role/test_qwen38small/run-0001/all/default/actor_cell00000:
+    <<: *id012
     overrides:
       remove: [/args/requested_load]
       set: {<<: *id009, /args/config_snapshot_name: tests/e2e/sglang/test_session_server_multi_role/test_qwen38small/run-0001}
@@ -219,8 +219,8 @@ processes:
         /args/config_snapshot_name: tests/e2e/sglang/test_session_server_multi_role/test_qwen38small/run-0001
         /args/load: null
     template: trainer-fsdp-02
-  ? tests/e2e/sglang/test_session_server_multi_role/test_qwen38small/run-0002/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : <<: *id012
+  tests/e2e/sglang/test_session_server_multi_role/test_qwen38small/run-0002/all/default/actor_cell00000:
+    <<: *id012
     overrides:
       remove: [/args/requested_load]
       set: {<<: [*id009, &id015 {/args/ci_enable_metrics_capture: false, /args/config_snapshot_name: tests/e2e/sglang/test_session_server_multi_role/test_qwen38small/run-0002,

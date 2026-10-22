@@ -219,8 +219,8 @@ processes:
           /args/over_sampling_batch_size: 32
           /args/save_debug_rollout_data: /root/shared_data/multi_policy_solver_verifier/$RUN_ID_0001/rollout_data/{rollout_id}.pt
     template: rollout_executor-01
-  ? tests/e2e/short/test_multi_policy_solver_verifier_gsm8k/run-0000/all/default/solver_actor_cell00000/trainer-engine-solver-actor-00000/incarnation-0000
-  : diffs:
+  tests/e2e/short/test_multi_policy_solver_verifier_gsm8k/run-0000/all/default/solver_actor_cell00000:
+    diffs:
       checkpoint_load-0000:
         set:
           <<:
@@ -256,8 +256,8 @@ processes:
           /args/backend/tokenizer_model: /root/models/Qwen3-0.6B, /args/hf_checkpoint: /root/models/Qwen3-0.6B, /args/ref_load: /root/models/Qwen3-0.6B,
           /args/trainer_actor_index: 1, /args/trainer_id: verifier-actor, /args/trainer_model_id: verifier}, /args/backend/rank: 0}
     template: trainer-megatron-02
-  ? tests/e2e/short/test_multi_policy_solver_verifier_gsm8k/run-0000/all/default/verifier_actor_cell00000/trainer-engine-verifier-actor-00000/incarnation-0000
-  : diffs:
+  tests/e2e/short/test_multi_policy_solver_verifier_gsm8k/run-0000/all/default/verifier_actor_cell00000:
+    diffs:
       checkpoint_load-0000:
         set:
           <<:

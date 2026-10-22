@@ -1,6 +1,6 @@
 processes:
-  ? tests/e2e/ckpt/test_fully_async_ckpt_missing_step/run-0000/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : diffs:
+  tests/e2e/ckpt/test_fully_async_ckpt_missing_step/run-0000/all/default/actor_cell00000:
+    diffs:
       checkpoint_load-0000:
         set:
           <<: &id001 {/args/backend/lr_decay_iters: 12, /args/backend/model_type: {$enum: megatron.core.enums.ModelType, name: encoder_or_decoder},
@@ -45,8 +45,8 @@ processes:
   tests/e2e/ckpt/test_fully_async_ckpt_missing_step/run-0000/all/default/worker_manager:
     overrides: *id006
     template: worker_manager-01
-  ? tests/e2e/ckpt/test_fully_async_ckpt_missing_step/run-0001/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : diffs:
+  tests/e2e/ckpt/test_fully_async_ckpt_missing_step/run-0001/all/default/actor_cell00000:
+    diffs:
       checkpoint_load-0000:
         set:
           <<: *id001

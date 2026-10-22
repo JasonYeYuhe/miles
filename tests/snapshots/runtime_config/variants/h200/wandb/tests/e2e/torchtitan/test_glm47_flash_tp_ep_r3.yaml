@@ -1,6 +1,5 @@
 processes:
-  ? tests/e2e/torchtitan/test_glm47_flash_tp_ep_r3/run-0000/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : {ranks: [0, 1, 2, 3, 4, 5, 6, 7], template: trainer-fsdp-01}
+  tests/e2e/torchtitan/test_glm47_flash_tp_ep_r3/run-0000/all/default/actor_cell00000: {ranks: [0, 1, 2, 3, 4, 5, 6, 7], template: trainer-fsdp-01}
   tests/e2e/torchtitan/test_glm47_flash_tp_ep_r3/run-0000/all/default/inference_controller:
     diffs: &id002 {router_endpoints-0000: {set: {<<: &id001 {/args/sglang_model_routers: {default: {$tuple: [$HOST, $PORT]}},
             /args/sglang_router_ip: $HOST, /args/sglang_router_port: $PORT}}}}

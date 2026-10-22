@@ -1,5 +1,5 @@
 processes:
-  tests/e2e/ckpt/test_qwen3_5_0.8B_ckpt/run-0000/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000:
+  tests/e2e/ckpt/test_qwen3_5_0.8B_ckpt/run-0000/all/default/actor_cell00000:
     diffs: &id013
       checkpoint_load-0000:
         set:
@@ -45,7 +45,7 @@ processes:
   tests/e2e/ckpt/test_qwen3_5_0.8B_ckpt/run-0000/all/default/worker_manager:
     overrides: *id006
     template: worker_manager-01
-  tests/e2e/ckpt/test_qwen3_5_0.8B_ckpt/run-0001/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000:
+  tests/e2e/ckpt/test_qwen3_5_0.8B_ckpt/run-0001/all/default/actor_cell00000:
     diffs: &id018
       checkpoint_load-0000:
         set:
@@ -83,7 +83,7 @@ processes:
   tests/e2e/ckpt/test_qwen3_5_0.8B_ckpt/run-0001/all/default/worker_manager:
     overrides: *id012
     template: worker_manager-01
-  tests/e2e/ckpt/test_qwen3_5_0.8B_ckpt/run-0002/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000:
+  tests/e2e/ckpt/test_qwen3_5_0.8B_ckpt/run-0002/all/default/actor_cell00000:
     diffs: *id013
     overrides:
       set: {<<: [*id007, *id002, &id017 {/args/backend/async_save: true, /args/backend/async_strategy: nvrx, /args/backend/use_persistent_ckpt_worker: true},
@@ -111,7 +111,7 @@ processes:
   tests/e2e/ckpt/test_qwen3_5_0.8B_ckpt/run-0002/all/default/worker_manager:
     overrides: *id016
     template: worker_manager-01
-  tests/e2e/ckpt/test_qwen3_5_0.8B_ckpt/run-0003/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000:
+  tests/e2e/ckpt/test_qwen3_5_0.8B_ckpt/run-0003/all/default/actor_cell00000:
     diffs: *id018
     overrides: {set: {<<: &id019 {/args/config_snapshot_name: tests/e2e/ckpt/test_qwen3_5_0.8B_ckpt/run-0003, /args/wandb_group: $RUN_ID_0008_$CI_COMMIT_NAME_github},
         /args/backend/low_memory_resume: true, /args/ci_check_model_hash: true}}

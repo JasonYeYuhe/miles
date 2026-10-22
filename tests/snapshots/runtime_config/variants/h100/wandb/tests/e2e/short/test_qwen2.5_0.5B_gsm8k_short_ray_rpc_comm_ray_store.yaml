@@ -1,6 +1,6 @@
 processes:
-  ? tests/e2e/short/test_qwen2.5_0.5B_gsm8k_short_ray_rpc_comm_ray_store/run-0000/all/default/actor_cell00000/trainer-engine-actor-00000/incarnation-0000
-  : diffs:
+  tests/e2e/short/test_qwen2.5_0.5B_gsm8k_short_ray_rpc_comm_ray_store/run-0000/all/default/actor_cell00000:
+    diffs:
       checkpoint_load-0000:
         set:
           <<:
