@@ -4,11 +4,10 @@ from typing import Any, NamedTuple
 
 import torch
 
-from miles.backends.sglang_utils.sglang_api_client import SGLangApiClient
 from miles.backends.training_utils.weight_update.protocols.utils.rollout_engine_rank_assignment import (
     RolloutEngineRankAssignment,
 )
-from miles.utils import async_utils
+from miles.backends.training_utils.weight_update.rollout_cell_updater import _RolloutCellUpdater
 
 
 class RemoteWeightLocation(NamedTuple):
@@ -21,6 +20,7 @@ class RemoteWeightLocation(NamedTuple):
 class RemoteShard:
     """Published weight addresses of one engine rank's target or draft runner."""
 
+    cell_id: str
     rollout_engine_ind: int
     rollout_engine_rank: int
     runner_role: str
@@ -36,27 +36,29 @@ class RemoteShard:
 
 
 def query_remote_shards(
-    rollout_engines: Sequence[SGLangApiClient],
+    cell_updaters_of_cell_id: dict[str, _RolloutCellUpdater],
+    engine_cell_ids: Sequence[str],
     assignments: Sequence[RolloutEngineRankAssignment],
     runner_roles: Sequence[str],
-    build_remote_shard: Callable[[Any, int, int, str], RemoteShard],
+    build_remote_shard: Callable[[Any, str, int, int, str], RemoteShard],
 ) -> dict[str, dict[int, list[RemoteShard]]]:
     """Return assigned shards by runner role and rollout rank, each built by `build_remote_shard` from the transfer
-    engine info its rollout engine rank published."""
+    engine info its rollout engine rank published; a rank whose cell returned no info is left out."""
     return {
         runner_role: {
             assignment.rollout_engine_rank: [
-                build_remote_shard(
-                    async_utils.run(
-                        rollout_engines[rollout_engine_ind].get_remote_instance_transfer_engine_info(
-                            rank=assignment.rollout_engine_rank, role=runner_role
-                        )
-                    ),
-                    rollout_engine_ind,
-                    assignment.rollout_engine_rank,
-                    runner_role,
-                )
+                remote_shard
                 for rollout_engine_ind in assignment.rollout_engine_indices
+                if (
+                    remote_shard := _query_remote_shard(
+                        cell_updaters_of_cell_id[engine_cell_ids[rollout_engine_ind]],
+                        rollout_engine_ind,
+                        assignment.rollout_engine_rank,
+                        runner_role,
+                        build_remote_shard,
+                    )
+                )
+                is not None
             ]
             for assignment in assignments
         }
@@ -77,3 +79,20 @@ def assert_tensors_fit(remote_shard: RemoteShard, tensors_by_name: dict[str, tor
             f"{name} is {tensor.nbytes} bytes here but {target_nbytes} bytes on {target}; "
             "writing it would run past the target"
         )
+
+
+def _query_remote_shard(
+    cell_updater: _RolloutCellUpdater,
+    rollout_engine_ind: int,
+    rollout_engine_rank: int,
+    runner_role: str,
+    build_remote_shard: Callable[[Any, str, int, int, str], RemoteShard],
+) -> RemoteShard | None:
+    transfer_engine_info = cell_updater.submit_client_call(
+        "get_remote_instance_transfer_engine_info", rank=rollout_engine_rank, role=runner_role
+    ).result()
+    if transfer_engine_info is None:
+        return None
+    return build_remote_shard(
+        transfer_engine_info, cell_updater.cell_id, rollout_engine_ind, rollout_engine_rank, runner_role
+    )
