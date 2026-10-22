@@ -30,7 +30,7 @@ import json
 import os
 import threading
 import time
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict, deque
 from collections.abc import Callable, Iterator
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -409,16 +409,20 @@ class _AppendCursor:
             self._offsets[key] = offset + len(complete_lines)
 
 
-class _LongPhaseIndex:
-    """Phase intervals a windowed read can miss, across every partition of the
-    phases stream: those still open (a stall can be older than any window) and
-    those closed after more than ``longer_than_s`` (the close lands past any
-    window's upper slack).
+class _PhaseIndex:
+    """What a windowed read of the phases stream cannot answer, across every
+    partition: intervals still open (a stall can be older than any window),
+    intervals closed after more than ``longer_than_s`` (the close lands past
+    any window's upper slack), and each phase's most recent closed durations
+    (the stall baseline: a phase every rank is stuck in stops closing, so a
+    trailing window of closes would empty out).
 
     Each partition's bytes are folded in once and later calls read only what
     was appended. An open marker always lands before its close: the sink
     pushes it at ``Timer.start`` while the close waits for a batch."""
 
+    # a few steps' worth of closes at 1024 ranks
+    RECENT_CLOSES_PER_PHASE: ClassVar[int] = 4096
     _INTERVAL_KEY_FIELD_PREFIXES: ClassVar[tuple[bytes, ...]] = (b'"name":', b'"t0":', b'"node":', b'"rank":')
     _OPEN_T1_BYTES: ClassVar[bytes] = json.dumps(PhaseEvent.OPEN_T1).encode()
 
@@ -431,26 +435,49 @@ class _LongPhaseIndex:
         self._open_event_by_line: dict[bytes, PhaseEvent] = {}
         # keyed like the open lines, so re-reading a chunk after a failed one stays idempotent
         self._long_closed_event_by_interval_key: dict[tuple[bytes, ...], PhaseEvent] = {}
+        self._recent_closes_by_raw_name: dict[bytes, deque[tuple[float, float]]] = defaultdict(
+            lambda: deque(maxlen=self.RECENT_CLOSES_PER_PHASE)
+        )
         self._lock = threading.Lock()
 
     def events(self) -> list[PhaseEvent]:
+        """Every interval still open, and every closed one longer than ``longer_than_s``."""
         with self._lock:
-            for _, _, complete_lines in self._cursor.appended():
-                for line in complete_lines.splitlines():
-                    interval_key = tuple(_raw_field_value(line, field) for field in self._INTERVAL_KEY_FIELD_PREFIXES)
-                    t1_bytes = _raw_field_value(line, b'"t1":')
-                    if t1_bytes == self._OPEN_T1_BYTES:
-                        self._open_line_by_interval_key[interval_key] = line
-                        continue
-                    self._open_line_by_interval_key.pop(interval_key, None)
-                    if float(t1_bytes) - float(interval_key[1]) > self._longer_than_s:
-                        self._long_closed_event_by_interval_key[interval_key] = PhaseEvent.from_dict(json.loads(line))
+            self._fold_appended()
             open_lines = set(self._open_line_by_interval_key.values())
             self._open_event_by_line = {
                 line: self._open_event_by_line.get(line) or PhaseEvent.from_dict(json.loads(line))
                 for line in open_lines
             }
             return [*self._open_event_by_line.values(), *self._long_closed_event_by_interval_key.values()]
+
+    def recent_closed_durations(self, *, since_t0: float) -> dict[str, list[float]]:
+        """Each phase's last ``RECENT_CLOSES_PER_PHASE`` closed durations, of
+        intervals that began at or after ``since_t0``."""
+        with self._lock:
+            self._fold_appended()
+            return {
+                json.loads(raw_name): [duration for t0, duration in closes if t0 >= since_t0]
+                for raw_name, closes in self._recent_closes_by_raw_name.items()
+            }
+
+    def _fold_appended(self) -> None:
+        for _, _, complete_lines in self._cursor.appended():
+            # appended once the chunk folds whole: a re-read after a failure must not count a close twice
+            closes = []
+            for line in complete_lines.splitlines():
+                interval_key = tuple(_raw_field_value(line, field) for field in self._INTERVAL_KEY_FIELD_PREFIXES)
+                t1_bytes = _raw_field_value(line, b'"t1":')
+                if t1_bytes == self._OPEN_T1_BYTES:
+                    self._open_line_by_interval_key[interval_key] = line
+                    continue
+                self._open_line_by_interval_key.pop(interval_key, None)
+                t0, duration = float(interval_key[1]), float(t1_bytes) - float(interval_key[1])
+                closes.append((interval_key[0], t0, duration))
+                if duration > self._longer_than_s:
+                    self._long_closed_event_by_interval_key[interval_key] = PhaseEvent.from_dict(json.loads(line))
+            for raw_name, t0, duration in closes:
+                self._recent_closes_by_raw_name[raw_name].append((t0, duration))
 
 
 def _raw_field_value(line: bytes, prefix: bytes) -> bytes:
@@ -490,7 +517,7 @@ class MetricStore:
         self._offsets: dict[Stream, int] = {s: 0 for s in Stream if s not in self.PARTITIONED_STREAMS}
         self._readers: dict[Stream, _PartitionReader] = {s: self._make_reader(s) for s in self.PARTITIONED_STREAMS}
         self.unserializable_dropped = 0
-        self._long_phases = _LongPhaseIndex(self._readers[Stream.PHASES], longer_than_s=self.MAX_WINDOW_S)
+        self._phase_index = _PhaseIndex(self._readers[Stream.PHASES], longer_than_s=self.MAX_WINDOW_S)
         self._catalog: dict[str, dict] | None = None  # write-side lane catalog accumulator
         # full-window engine query cache, versioned by partition file sizes so
         # appended scrapes invalidate it; the lock is load-bearing because sync
@@ -837,7 +864,16 @@ class MetricStore:
             for event in self._readers[Stream.PHASES].window(t0, upper)
             if not event.open and event.t1 - event.t0 <= self.MAX_WINDOW_S
         ]
-        return closed + self._long_phases.events()
+        return closed + self._phase_index.events()
+
+    def open_phase_events(self) -> list[PhaseEvent]:
+        """Every phase interval opened and not yet closed, however old."""
+        return [event for event in self._phase_index.events() if event.open]
+
+    def recent_closed_phase_durations(self, *, since_t0: float) -> dict[str, list[float]]:
+        """Each phase's most recent closed durations, of intervals that began at
+        or after ``since_t0``, however long ago they closed."""
+        return self._phase_index.recent_closed_durations(since_t0=since_t0)
 
     def has_stream(self, stream: Stream) -> bool:
         if stream in self.PARTITIONED_STREAMS:

@@ -5,7 +5,7 @@ from tests.fast.dashboard.dummy_dump import blank_samples, dump_dummy_run
 
 from miles.dashboard.advisory import compute_advisories
 from miles.dashboard.dump_reader import DumpReader, RolloutIds
-from miles.dashboard.store import EngineSample, Meta, MetricsRecord, MetricStore, PhaseEvent, Stream
+from miles.dashboard.store import EngineSample, GpuSample, Meta, MetricsRecord, MetricStore, PhaseEvent, Stream
 
 
 def _store(tmp_path, *, args: dict, engine_samples: list[EngineSample]) -> MetricStore:
@@ -455,6 +455,21 @@ def test_stall_older_than_the_baseline_window_is_still_judged(tmp_path):
     day = 86400.0
     for closed in _closed_steps(n=5, start=day):
         writer.append(replace(closed, rank=1))
+    writer.flush()
+
+    [advisory] = compute_advisories(MetricStore.load(tmp_path))
+    assert advisory.level == "critical" and "train_wait" in advisory.message
+
+
+def test_stall_on_every_rank_keeps_its_baseline(tmp_path):
+    """Every rank stuck in one phase closes none for a day while GPU samples
+    keep the edge moving: the baseline must outlive any trailing window."""
+    writer = MetricStore(tmp_path)
+    writer.write_meta(Meta(run_name="global-stall", start_ts=0.0, args={}))
+    for i in range(5):
+        writer.append(_phase("train_wait", 20.0 * i, 20.0 * i + 10.0))
+    writer.append(_phase("train_wait", 200.0, PhaseEvent.OPEN_T1))
+    writer.append(GpuSample(ts=86400.0, node="n1", gpu=0, util=0, mem_mb=1, power_w=1))
     writer.flush()
 
     [advisory] = compute_advisories(MetricStore.load(tmp_path))
