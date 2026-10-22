@@ -1,8 +1,8 @@
 import sys
 from dataclasses import dataclass, field
 from types import ModuleType, SimpleNamespace
-from unittest.mock import Mock
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 import torch
