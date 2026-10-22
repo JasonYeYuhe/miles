@@ -117,6 +117,7 @@ def make_args(**overrides) -> Namespace:
         sglang_router_ip="127.0.0.1",
         sglang_router_port=30000,
         sglang_router_request_timeout_secs=14400,
+        use_miles_router=False,
         eval_num_gpus=0,
         namespaced_radix_cache=True,
     )
@@ -484,7 +485,7 @@ async def test_sample_cancellation_aborts_group_without_stopping_worker(
         return sample
 
     monkeypatch.setattr(rollout_common, "generate_and_rm", generate_sample)
-    monkeypatch.setattr(rollout_common, "policy_uses_routing_key", lambda args: False)
+    monkeypatch.setattr(rollout_common, "router_routes_by_key", lambda args: False)
     args = make_args(
         rollout_batch_size=1,
         async_max_concurrent_samples=N_SAMPLES_PER_PROMPT,

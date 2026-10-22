@@ -43,6 +43,7 @@ def _make_input(*, prompt: str | list[dict[str, str]], label: str) -> GenerateFn
         use_critic=False,
         sglang_model_routers={"solver": ("solver-host", 1111), "verifier": ("verifier-host", 2222)},
         sglang_router_policy="round_robin",
+        use_miles_router=False,
         sglang_speculative_algorithm=None,
         rollout_max_response_len=16,
         rollout_max_context_len=None,

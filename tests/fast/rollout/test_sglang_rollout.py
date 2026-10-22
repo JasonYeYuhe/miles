@@ -16,6 +16,7 @@ def _make_generate_args() -> Namespace:
         sglang_router_ip="router",
         sglang_router_port=30000,
         sglang_router_policy="round_robin",
+        use_miles_router=False,
         sglang_speculative_algorithm=None,
         use_rollout_routing_replay=False,
         use_rollout_indexer_replay=False,

@@ -49,6 +49,7 @@ def _args(**overrides) -> Namespace:
         "sglang_router_policy": "round_robin",
         "sglang_router_port": 30000,
         "sglang_tokenizer_path": None,
+        "use_miles_router": False,
     }
     values.update(overrides)
     return Namespace(**values)

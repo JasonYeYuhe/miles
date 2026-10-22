@@ -20,6 +20,7 @@ class FakeGenerateState(GenerateState):
             mask_offpolicy_in_partial_rollout=False,
             group_rm=True,
             sglang_router_policy="round_robin",
+            use_miles_router=False,
         )
         self.generate_fn_semaphore = asyncio.Semaphore(2)
         self.aborted = False
@@ -52,6 +53,7 @@ def make_eval_args(*, namespaced_radix_cache: bool = True) -> dict[str, Any]:
         mask_offpolicy_in_partial_rollout=False,
         group_rm=False,
         sglang_router_policy="round_robin",
+        use_miles_router=False,
         eval_datasets=[EvalDatasetConfig(name="fake_ds", path="fake.jsonl", n_samples_per_eval_prompt=2)],
         hf_checkpoint="fake-checkpoint",
         apply_chat_template=False,
