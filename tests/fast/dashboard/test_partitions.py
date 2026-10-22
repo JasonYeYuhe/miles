@@ -311,3 +311,17 @@ def test_phase_longer_than_the_window_slack_shows_once_in_every_window_it_spans(
     for t0, t1 in [(BASE + HOUR, BASE + 2 * HOUR), (BASE + 9.5 * HOUR, BASE + 10.5 * HOUR)]:
         stalled = [p for p in store.phases_by_lane(t0=t0, t1=t1) if p["gpu"] == 1]
         assert [p["t0"] for p in stalled] == [BASE + 10], (t0, stalled)
+
+
+def test_iter_records_returns_every_phase_row_as_written(tmp_path):
+    """Tools replay the stream through the sinks: an open marker whose close
+    landed is still a row, unlike in the phase_events() query view."""
+    writer = MetricStore(tmp_path)
+    writer.write_meta(Meta(run_name="raw", start_ts=BASE, args={}))
+    interval = dict(name="train_wait", t0=BASE + 10, node="n", gpus=[0], rank=0, role=Role.TRAIN)
+    writer.append(PhaseEvent(**interval, t1=PhaseEvent.OPEN_T1))
+    writer.append(PhaseEvent(**interval, t1=BASE + 20))
+    writer.flush()
+    store = MetricStore.load(tmp_path)
+    assert [event.t1 for event in store.iter_records(Stream.PHASES)] == [PhaseEvent.OPEN_T1, BASE + 20]
+    assert [event.t1 for event in store.phase_events()] == [BASE + 20]

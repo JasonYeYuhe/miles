@@ -819,8 +819,10 @@ class MetricStore:
         return lanes
 
     def phase_events(self, t0: float | None = None, t1: float | None = None) -> list[PhaseEvent]:
-        """Raw phase events, open markers included — advisory heuristics need
-        the unexpanded events rather than the lane-resolved view."""
+        """Unexpanded phase events for [t0, t1] (not the lane-resolved view):
+        closed intervals that can overlap the window, every interval still open,
+        and every closed interval longer than ``MAX_WINDOW_S``. An open marker
+        whose close has landed is not returned; ``iter_records`` has the raw rows."""
         return self._phase_events(t0, t1)
 
     def _phase_events(self, t0: float | None, t1: float | None) -> list[PhaseEvent]:
@@ -859,7 +861,7 @@ class MetricStore:
                 for row in self._readers[stream].window(None, None).iter_rows(named=True)
             ]
         if stream is Stream.PHASES:
-            return list(self._phase_events(None, None))
+            return list(self._readers[stream].window(None, None))
         if stream is Stream.TRAJECTORIES:
             return self.trajectory_events()
         if stream is Stream.GPU_PROCESSES:
