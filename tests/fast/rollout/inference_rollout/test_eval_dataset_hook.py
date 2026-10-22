@@ -7,6 +7,7 @@ from tests.fast.fixtures.sglang_config_fixtures import make_sglang_config
 from miles.rollout import sglang_rollout
 from miles.rollout.base_types import GenerateFnInput, GenerateFnOutput
 from miles.rollout.inference_rollout.inference_rollout_eval import eval_rollout_single_dataset
+from miles.utils.args.component_rollout import InferenceRuntimeMutState
 from miles.utils.args.custom_function import CustomFunctionConfig
 from miles.utils.function_registry import function_registry
 from miles.utils.types import Sample
@@ -34,6 +35,7 @@ class TestEvalDatasetHook:
         vars(args).update(parser_defaults() | vars(args) | {"rollout_num_gpus": 1, "rollout_num_gpus_per_engine": 1, "sglang_server_concurrency": 1})
         args.sglang = make_sglang_config(enable_deterministic_inference=False, dp_size=1)
         vars(args).update(make_eval_args())
+        args.inference_runtime_mut_state = InferenceRuntimeMutState(engine_count=1, gpu_count=1)
         [dataset] = args.eval_datasets
         dataset.custom_generate_function_path = CustomFunctionConfig(path="test-dataset-generator")
         cache = make_eval_prompt_dataset_cache(args)
