@@ -10,6 +10,7 @@ from tests.fast.backends.training_utils.backend_owner_fixtures import (
 
 from miles.backends.training_utils.loss.hub.losses import policy_loss_function
 from miles.backends.training_utils.loss.objective import loss_function
+from miles.utils.args.custom_function import CustomFunctionConfig
 
 __all__ = ["native_backend_owner_state", "policy_backend_args", "uneven_policy_batch"]
 
@@ -66,8 +67,8 @@ class TestBackendLossNormalization:
         """A configured plugin receives backend token normalization instead of requiring flat fields."""
         args = policy_backend_args
         args.backend.calculate_per_token_loss = per_token
-        args.custom_pg_loss_reducer_function_path = (
-            "tests.fast.backends.training_utils.backend_owner_fixtures._per_token_reducer"
+        args.custom_pg_loss_reducer_function_path = CustomFunctionConfig(
+            path="tests.fast.backends.training_utils.backend_owner_fixtures._per_token_reducer"
         )
 
         loss, _ = policy_loss_function(
