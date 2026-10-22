@@ -33,6 +33,12 @@ def main_replay_boundary(
     ).save_pretrained(hf)
     flags = ["--sequence-parallel"] if sequence_parallel else []
     monkeypatch.setenv("CUDA_DEVICE_MAX_CONNECTIONS", "1")
+
+    def device_properties(device: torch.device) -> SimpleNamespace:
+        assert device == torch.device("cuda:0")
+        return SimpleNamespace(major=9)
+
+    monkeypatch.setattr(torch.cuda, "get_device_properties", device_properties)
     config = parse_megatron_test_config(
         "--ffn-hidden-size",
         "256",
