@@ -1,19 +1,15 @@
 base: fsdp
-base_sha256: f3b08a89e657e93f9d7efa42706e9cfbc8d5ed9a8971d30b6863963f76bdc6e7
+base_sha256: 463aa2fec11aa23b88f363a3c9477f1bb2d1d409ccf8b89a6e4ef47fedb7ea4a
 edits:
 - at: 65
   delete: 1
   insert: |2
       custom_inference_engine_provider_path: {config: null, path: miles.ray.rollout.external_engine_provider.static_inference_engine_provider}
-- at: 149
-  delete: 1
-  insert: |2
-      fallback_init_expected_num_cells: {}
-- at: 164
+- at: 163
   delete: 1
   insert: |2
       init_expected_num_cells: null
-- at: 293
+- at: 292
   delete: 2
   insert: |2
       rollout_external: true

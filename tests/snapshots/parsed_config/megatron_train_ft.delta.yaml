@@ -1,5 +1,5 @@
 base: megatron
-base_sha256: dfbd3225e5bd32d03363558436d8515425f9c9467cc3decfb87cd33f5310d47c
+base_sha256: 5edef0f67ef2d5cb950d064b5eed5c18021a936306171dfd76171a2566192c7c
 edits:
 - at: 10
   delete: 1
@@ -17,44 +17,44 @@ edits:
   delete: 1
   insert: |2
       enable_witness: true
-- at: 149
+- at: 148
   delete: 1
   insert: |2
       ft_components: [train]
-- at: 158
+- at: 157
   delete: 1
   insert: |2
       indep_dp: true
-- at: 173
+- at: 172
   delete: 1
   insert: |2
       log_inference_engine_weight_checksums: true
-- at: 193
+- at: 192
   delete: 1
   insert: |2
       max_tokens_per_gpu: 4096
-- at: 206
+- at: 205
   delete: 1
   insert: |2
       mini_ft_controller_enable: true
-- at: 839
+- at: 838
   delete: 1
   insert: |2
           non_persistent_ckpt_type: local
-- at: 841
+- at: 840
   delete: 2
   insert: |2
           non_persistent_local_ckpt_algo: atomic
           non_persistent_local_ckpt_dir: /tmp/miles_local_ckpt
-- at: 1265
+- at: 1264
   delete: 1
   insert: |2
       save_local_weight_checksum: true
-- at: 1838
+- at: 1837
   delete: 1
   insert: |2
       use_dynamic_batch_size: true
-- at: 1840
+- at: 1839
   delete: 1
   insert: |2
       use_fault_tolerance: true

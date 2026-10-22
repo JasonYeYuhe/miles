@@ -1,5 +1,5 @@
 base: fsdp
-base_sha256: f3b08a89e657e93f9d7efa42706e9cfbc8d5ed9a8971d30b6863963f76bdc6e7
+base_sha256: 463aa2fec11aa23b88f363a3c9477f1bb2d1d409ccf8b89a6e4ef47fedb7ea4a
 edits:
 - at: 1
   delete: 1
@@ -42,31 +42,31 @@ edits:
   delete: 1
   insert: |2
       eval_uses_snapshots: true
-- at: 164
+- at: 163
   delete: 2
   insert: |2
       init_expected_num_cells: {eval: 1}
-- {at: 170, delete: 1, insert: ''}
-- {at: 203, delete: 1, insert: ''}
-- {at: 224, delete: 1, insert: ''}
-- at: 265
+- {at: 169, delete: 1, insert: ''}
+- {at: 202, delete: 1, insert: ''}
+- {at: 223, delete: 1, insert: ''}
+- at: 264
   delete: 1
   insert: |2
       raw_fsdp: {<<: *id002, adam_beta1: 0.9, adam_beta2: 0.95, adam_eps: 1.0e-08, attn_implementation: flash_attention_2, backend_name: fsdp,
-- {at: 287, delete: 1, insert: ''}
-- at: 296
+- {at: 286, delete: 1, insert: ''}
+- at: 295
   delete: 1
   insert: |2
       rollout_function_path: *id003
-- at: 322
+- at: 321
   delete: 1
   insert: |2
         <<: &id004 {api_key: null, chat_template: null, enable_trace: false, log_level: info, otlp_traces_endpoint: 'localhost:4317',
-- at: 438
+- at: 437
   delete: 1
   insert: |2
           <<: *id004
-- at: 944
+- at: 943
   delete: 1
   insert: |2
         models:
@@ -78,8 +78,8 @@ edits:
             overrides: {enable_metrics: true, enable_return_indexer_topk: false, enable_return_routed_experts: false, model_path: null}
             worker_type: {$enum: miles.backends.sglang_utils.sglang_api_client.WorkerType, name: REGULAR}
           update_weights: false
-- at: 951
+- at: 950
   delete: 1
   insert: |2
       sglang_scaling: {groups: {eval: [{engine_offset: 0, gpu_offset: 0, num_gpus: 1}]}}
-- {at: 970, delete: 1, insert: ''}
+- {at: 969, delete: 1, insert: ''}

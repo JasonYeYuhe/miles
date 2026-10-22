@@ -1,5 +1,5 @@
 base: megatron
-base_sha256: dfbd3225e5bd32d03363558436d8515425f9c9467cc3decfb87cd33f5310d47c
+base_sha256: 5edef0f67ef2d5cb950d064b5eed5c18021a936306171dfd76171a2566192c7c
 edits:
 - at: 22
   delete: 1
@@ -13,11 +13,11 @@ edits:
   delete: 1
   insert: |2
       ci_test: true
-- at: 173
+- at: 172
   delete: 1
   insert: |2
       log_inference_engine_weight_checksums: true
-- at: 1259
+- at: 1258
   delete: 2
   insert: |2
       sample_ownership_grace_steps: 2

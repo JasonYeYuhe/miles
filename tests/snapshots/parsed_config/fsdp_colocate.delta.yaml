@@ -1,23 +1,23 @@
 base: fsdp
-base_sha256: f3b08a89e657e93f9d7efa42706e9cfbc8d5ed9a8971d30b6863963f76bdc6e7
+base_sha256: 463aa2fec11aa23b88f363a3c9477f1bb2d1d409ccf8b89a6e4ef47fedb7ea4a
 edits:
 - at: 50
   delete: 1
   insert: |2
       colocate: true
-- at: 164
+- at: 163
   delete: 1
   insert: |2
       init_expected_num_cells: {default: 1}
-- at: 237
+- at: 236
   delete: 1
   insert: |2
       offload_rollout: true
-- at: 239
+- at: 238
   delete: 1
   insert: |2
       offload_train: true
-- at: 267
+- at: 266
   delete: 8
   insert: |2
         disable_grad_buffers_cpu_backup: true, disable_param_buffers_cpu_backup: true, dp_replicate_size: 1, finetune: true, fp16: false,
@@ -28,15 +28,15 @@ edits:
         no_load_optim: true, no_load_rng: true, no_save_optim: false, optimizer: adam, override_lr_scheduler: false, profile_step_end: 12,
         profile_step_start: 10, rank: 0, recompute_granularity: null, record_memory_history: false, tensorboard_dir: null, use_checkpoint_lr_scheduler: true,
         use_pytorch_profiler: false, wandb_run_name: null, warmup_ratio: 0.03, weight_decay: 0.0, world_size: 1}
-- at: 306
+- at: 305
   delete: 1
   insert: |2
       rollout_num_gpus: 1
-- at: 466
+- at: 465
   delete: 1
   insert: |2
           cuda_graph_backend_prefill: disabled
-- at: 944
+- at: 943
   delete: 1
   insert: |2
         models:
@@ -46,7 +46,7 @@ edits:
           - {needs_offload: true, num_gpus_per_engine: 1, overrides: {model_path: null}, worker_type: {$enum: miles.backends.sglang_utils.sglang_api_client.WorkerType,
               name: REGULAR}}
           update_weights: true
-- at: 951
+- at: 950
   delete: 1
   insert: |2
       sglang_scaling: {groups: {default: [{engine_offset: 0, gpu_offset: 0, num_gpus: 1}]}}

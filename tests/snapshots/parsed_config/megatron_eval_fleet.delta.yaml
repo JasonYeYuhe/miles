@@ -1,5 +1,5 @@
 base: megatron
-base_sha256: dfbd3225e5bd32d03363558436d8515425f9c9467cc3decfb87cd33f5310d47c
+base_sha256: 5edef0f67ef2d5cb950d064b5eed5c18021a936306171dfd76171a2566192c7c
 edits:
 - at: 1
   delete: 1
@@ -41,31 +41,31 @@ edits:
   delete: 1
   insert: |2
       eval_uses_snapshots: true
-- at: 161
+- at: 160
   delete: 2
   insert: |2
       init_expected_num_cells: {eval: 1}
-- {at: 167, delete: 1, insert: ''}
-- {at: 199, delete: 1, insert: ''}
-- {at: 219, delete: 1, insert: ''}
-- at: 262
+- {at: 166, delete: 1, insert: ''}
+- {at: 198, delete: 1, insert: ''}
+- {at: 218, delete: 1, insert: ''}
+- at: 261
   delete: 1
   insert: |2
           <<: *id002
-- {at: 1133, delete: 1, insert: ''}
-- at: 1142
+- {at: 1132, delete: 1, insert: ''}
+- at: 1141
   delete: 1
   insert: |2
       rollout_function_path: *id003
-- at: 1167
+- at: 1166
   delete: 1
   insert: |2
         <<: &id004 {api_key: null, enable_trace: false, log_level: info, otlp_traces_endpoint: 'localhost:4317', reasoning_parser: null,
-- at: 1281
+- at: 1280
   delete: 1
   insert: |2
           <<: *id004
-- at: 1788
+- at: 1787
   delete: 1
   insert: |2
         models:
@@ -77,8 +77,8 @@ edits:
             overrides: {enable_metrics: true, enable_return_indexer_topk: false, enable_return_routed_experts: false, model_path: null}
             worker_type: {$enum: miles.backends.sglang_utils.sglang_api_client.WorkerType, name: REGULAR}
           update_weights: false
-- at: 1795
+- at: 1794
   delete: 1
   insert: |2
       sglang_scaling: {groups: {eval: [{engine_offset: 0, gpu_offset: 0, num_gpus: 1}]}}
-- {at: 1814, delete: 1, insert: ''}
+- {at: 1813, delete: 1, insert: ''}

@@ -1,23 +1,23 @@
 base: megatron
-base_sha256: dfbd3225e5bd32d03363558436d8515425f9c9467cc3decfb87cd33f5310d47c
+base_sha256: 5edef0f67ef2d5cb950d064b5eed5c18021a936306171dfd76171a2566192c7c
 edits:
 - at: 51
   delete: 1
   insert: |2
       colocate: true
-- at: 161
+- at: 160
   delete: 1
   insert: |2
       init_expected_num_cells: {default: 1}
-- at: 1151
+- at: 1150
   delete: 1
   insert: |2
       rollout_num_gpus: 1
-- at: 1310
+- at: 1309
   delete: 1
   insert: |2
           cuda_graph_backend_prefill: disabled
-- at: 1788
+- at: 1787
   delete: 1
   insert: |2
         models:
@@ -27,7 +27,7 @@ edits:
           - {needs_offload: false, num_gpus_per_engine: 1, overrides: {model_path: null}, worker_type: {$enum: miles.backends.sglang_utils.sglang_api_client.WorkerType,
               name: REGULAR}}
           update_weights: true
-- at: 1795
+- at: 1794
   delete: 1
   insert: |2
       sglang_scaling: {groups: {default: [{engine_offset: 0, gpu_offset: 0, num_gpus: 1}]}}

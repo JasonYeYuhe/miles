@@ -147,7 +147,6 @@ config:
   experts_shared_outer_loras: false
   extra_high_precision_layers_hf: {$tuple: []}
   extra_high_precision_layers_megatron: {$tuple: []}
-  fallback_init_expected_num_cells: null
   fetch_trajectory_retry_times: -1
   ft_components: []
   fully_async: false
