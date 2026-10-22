@@ -1,9 +1,9 @@
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 import torch
-from megatron.bridge import AutoBridge
 from tests.fast.backends.megatron_utils.test_dsv4_bridge_runtime import _runtime_args
 
 from miles.backends.megatron_utils.model_provider import get_model_provider_func
@@ -18,7 +18,7 @@ class _SdkModel(torch.nn.Module):
 class TestBridgeWitnessConfig:
     @pytest.mark.parametrize("enabled", [False, True])
     def test_bridge_provider_rejects_witness_and_keeps_the_normal_companion_path(
-        self, monkeypatch: pytest.MonkeyPatch, enabled: bool
+        self, monkeypatch: pytest.MonkeyPatch, enabled: bool, bridge_sdk: Mock
     ) -> None:
         """Bridge witness rejection occurs after real configuration and SDK model construction."""
         calls: list[str] = []
@@ -34,7 +34,7 @@ class TestBridgeWitnessConfig:
 
         provider = SimpleNamespace(finalize=finalize, provide=provide)
         bridge = SimpleNamespace(to_megatron_provider=lambda load_weights: provider)
-        monkeypatch.setattr(AutoBridge, "from_hf_pretrained", lambda *args, **kwargs: bridge)
+        bridge_sdk.from_hf_pretrained.return_value = bridge
         group = SimpleNamespace(rank=0)
         monkeypatch.setattr(
             "miles.backends.training_utils.parallel.get_parallel_state",

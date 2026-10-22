@@ -3,7 +3,6 @@ from unittest.mock import Mock
 
 import pytest
 import torch
-import transformer_engine.pytorch as te
 
 from miles.backends.megatron_utils.megatron_config import MegatronArgsNamespace
 from miles.backends.megatron_utils.megatron_to_hf.processors.quantizer_fp8 import quantize_params_fp8
@@ -39,7 +38,7 @@ class TestIndexerQuantizationOwnership:
 
     @pytest.mark.parametrize("interleaved", [False, True])
     def test_mxfp8_indexer_precision_follows_backend_rope_layout(
-        self, monkeypatch: pytest.MonkeyPatch, interleaved: bool
+        self, transformer_engine_quantizer: Mock, interleaved: bool
     ) -> None:
         """MXFP8 export respects backend indexer layout before invoking the external quantizer."""
         args = SimpleNamespace(
@@ -50,9 +49,8 @@ class TestIndexerQuantizationOwnership:
             _rowwise_data=torch.zeros(32, 32, dtype=torch.uint8),
             _rowwise_scale_inv=torch.ones(32, 1, dtype=torch.uint8),
         )
-        sdk = Mock()
+        sdk = transformer_engine_quantizer
         sdk.return_value.quantize.return_value = quantized
-        monkeypatch.setattr(te, "MXFP8Quantizer", sdk)
         values = [("model.layers.0.self_attn.indexer.wk.weight", torch.ones(1, 32))]
 
         result = quantize_params_mxfp8(

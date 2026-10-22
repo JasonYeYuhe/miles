@@ -28,3 +28,26 @@ def raw_mbridge_loader(monkeypatch: pytest.MonkeyPatch) -> Callable[[bool], list
         return observed
 
     return configure
+
+
+@pytest.fixture
+def bridge_sdk(monkeypatch: pytest.MonkeyPatch) -> Mock:
+    sdk = Mock()
+    module = ModuleType("megatron.bridge")
+    module.AutoBridge = sdk
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    return sdk
+
+
+@pytest.fixture
+def transformer_engine_quantizer(monkeypatch: pytest.MonkeyPatch) -> Mock:
+    sdk = Mock()
+    engine = ModuleType("transformer_engine")
+    engine.pytorch = ModuleType("transformer_engine.pytorch")
+    engine.pytorch.MXFP8Quantizer = sdk
+    constants = ModuleType("transformer_engine.pytorch.constants")
+    constants.TE_DType = {torch.float8_e4m3fn: object()}
+    engine.pytorch.constants = constants
+    for module in (engine, engine.pytorch, constants):
+        monkeypatch.setitem(sys.modules, module.__name__, module)
+    return sdk
