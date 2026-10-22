@@ -1244,12 +1244,15 @@ class TestInitLifecycle:
         assert received["context_lock"] is controller.context_lock
 
     @pytest.mark.asyncio
-    async def test_init_creates_the_eval_fleet_from_the_eval_server(self, monkeypatch: pytest.MonkeyPatch):
+    @pytest.mark.parametrize("eval_num_gpus", [0, 2])
+    async def test_init_creates_the_eval_fleet_from_the_eval_server(
+        self, monkeypatch: pytest.MonkeyPatch, eval_num_gpus: int
+    ) -> None:
         """The eval fleet drives the dedicated eval engines, so it must be handed that server and no other."""
         monkeypatch.setattr(inference_controller_module, "InferenceControllerEvalFleet", _RecordingEvalFleet)
         default, eval_srv = _RecordingServer(model_name="default"), _RecordingServer(model_name="eval")
         _patch_init(monkeypatch, servers={"default": default, "eval": eval_srv})
-        controller = self._controller(make_args(eval_num_gpus=2))
+        controller = self._controller(make_args(eval_num_gpus=eval_num_gpus))
 
         await controller.init()
         await controller.dispose()
@@ -1259,15 +1262,18 @@ class TestInitLifecycle:
         assert controller._eval_fleet.args is controller.args
 
     @pytest.mark.asyncio
-    async def test_init_without_eval_gpus_creates_no_eval_fleet(self, monkeypatch: pytest.MonkeyPatch):
+    @pytest.mark.parametrize("eval_num_gpus", [0, 2])
+    async def test_init_without_an_eval_server_creates_no_eval_fleet(
+        self, monkeypatch: pytest.MonkeyPatch, eval_num_gpus: int
+    ) -> None:
         """A run without dedicated eval engines has no eval server to build a fleet from."""
         monkeypatch.setattr(
             inference_controller_module,
             "InferenceControllerEvalFleet",
-            lambda *args, **kwargs: pytest.fail("no eval fleet without eval gpus"),
+            lambda *args, **kwargs: pytest.fail("no eval fleet without an eval server"),
         )
         _patch_init(monkeypatch, servers={"default": _RecordingServer()})
-        controller = self._controller(make_args(eval_num_gpus=0))
+        controller = self._controller(make_args(eval_num_gpus=eval_num_gpus))
 
         await controller.init()
         await controller.dispose()
