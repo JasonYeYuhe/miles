@@ -1,7 +1,7 @@
 """Check that an installed Miles wheel can start an FSDP or torchtitan run without Megatron.
 
-Megatron-LM, Megatron Bridge, mbridge, TransformerEngine and apex are blocked on import, so the
-check fails if any module the FSDP or torchtitan path loads at import time reaches one of them,
+Megatron-LM, Megatron Bridge, mbridge, TransformerEngine and apex are made to look uninstalled, so
+the check fails if any module the FSDP or torchtitan path loads at import time reaches one of them,
 even on a machine where they are installed. The entry scripts are not part of the wheel, so they
 are loaded from the directory given on the command line. Run it from outside the checkout so
 ``miles`` resolves to the installed wheel:
@@ -10,7 +10,6 @@ are loaded from the directory given on the command line. Run it from outside the
 """
 
 import importlib
-import importlib.abc
 import importlib.util
 import sys
 import sysconfig
@@ -19,15 +18,6 @@ from pathlib import Path
 MEGATRON_ONLY = ("megatron", "mbridge", "transformer_engine", "apex")
 BACKENDS = ("fsdp", "torchtitan")
 ENTRY_SCRIPTS = ("train.py", "train_async.py")
-
-
-class _BlockMegatron(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path, target=None):
-        if fullname.split(".")[0] in MEGATRON_ONLY:
-            raise ModuleNotFoundError(
-                f"{fullname} is blocked: the wheel smoke check runs without Megatron", name=fullname
-            )
-        return None
 
 
 def _check_miles_is_installed() -> None:
@@ -61,7 +51,10 @@ def _check_chat_templates() -> None:
 
 def main() -> None:
     checkout = Path(sys.argv[1]).resolve()
-    sys.meta_path.insert(0, _BlockMegatron())
+    # A None entry is how a missing package looks: imports raise ModuleNotFoundError and
+    # importlib.util.find_spec probes return None, even where the package is installed.
+    for name in MEGATRON_ONLY:
+        sys.modules[name] = None
 
     _check_miles_is_installed()
     _load_entry_scripts(checkout)

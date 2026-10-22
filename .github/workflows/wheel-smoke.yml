@@ -4,9 +4,10 @@ name: Wheel smoke
 # environment that has no Megatron, and runs tests/ci/wheel_smoke.py: the FSDP and torchtitan
 # entry paths must import and parse their arguments from the installed wheel alone.
 #
-# SGLang is the sglang-miles source tree on PYTHONPATH, as in the hosted CPU stage, until a
-# hosted sglang-miles wheel exists. Its runtime imports come from tests/ci/requirements-ci-cpu.txt,
-# with torch overridden to the version sglang-miles pins, which the torchtitan backend needs.
+# SGLang is a source tree on PYTHONPATH, resolved like every other CI job (ci-sglang-pr:, then
+# release-lock.json, then sglang-miles), until a hosted sglang-miles wheel exists. Its runtime
+# imports come from tests/ci/requirements-ci-cpu.txt, with torch overridden to the version that
+# SGLang tree pins, which the torchtitan backend needs.
 
 on:
   push:
@@ -25,23 +26,17 @@ jobs:
       - name: Checkout miles
         uses: actions/checkout@v4
 
-      - name: Resolve the SGLang ref
-        id: sglang
-        shell: bash
-        run: |
-          # Release branches pin SGLang in release-lock.json; elsewhere follow the moving branch.
-          if [ -f release-lock.json ]; then
-            ref=$(python3 -c "import json; print(json.load(open('release-lock.json'))['sglang_commit'])")
-          else
-            ref=sglang-miles
-          fi
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+      - name: Resolve dependency refs
+        id: resolve-refs
+        uses: ./.github/actions/resolve-dependency-refs
+        with:
+          pr_body: ${{ github.event.pull_request.body || '' }}
 
       - name: Checkout sglang
         uses: actions/checkout@v4
         with:
           repository: sgl-project/sglang
-          ref: ${{ steps.sglang.outputs.ref }}
+          ref: ${{ steps.resolve-refs.outputs.ci_sglang_pr }}
           path: sglang
 
       - name: Set up Python
