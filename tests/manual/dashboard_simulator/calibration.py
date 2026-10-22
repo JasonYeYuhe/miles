@@ -21,7 +21,7 @@ _LIFECYCLE_TS_KEYS = ("t0", "t1", "req_ts", "prev_t1")
 class CalibrationTrajectory:
     """What the trajectory stream needs of one calibration sample, without its tokens."""
 
-    position: int
+    slot: int
     status: str
     lifecycle: list[dict]
     last_weight_version: int
@@ -91,10 +91,11 @@ class CalibrationRun:
         trajectories_by_rollout_id = {}
         for rollout_id in self.rollout_ids:
             trajectories = []
-            for position, sample in enumerate(self.load_samples(rollout_id)):
+            samples = self.load_samples(rollout_id)
+            for slot, sample in zip(sample_slots(samples), samples, strict=True):
                 if events := sorted(recorded_events_by_index.get(sample["index"], []), key=lambda e: e.ts):
                     trajectory = CalibrationTrajectory(
-                        position=position,
+                        slot=slot,
                         status=sample["status"],
                         lifecycle=[],
                         last_weight_version=_last_weight_version(sample),
@@ -106,7 +107,7 @@ class CalibrationRun:
                     lifecycle = _lifecycle_segments(sample["metadata"]["lifecycle"])
                     first_request_ts = min(segment.get("req_ts") or segment["t0"] for segment in lifecycle)
                     trajectory = CalibrationTrajectory(
-                        position=position,
+                        slot=slot,
                         status=sample["status"],
                         lifecycle=lifecycle,
                         last_weight_version=_last_weight_version(sample),
@@ -116,6 +117,13 @@ class CalibrationRun:
                 trajectories.append(trajectory)
             trajectories_by_rollout_id[rollout_id] = trajectories
         return trajectories_by_rollout_id
+
+
+def sample_slots(samples: list[dict]) -> list[int]:
+    """Each sample's slot in its step: the order its ``index`` first appears.
+    The leaves of one session share an index, so they share a slot."""
+    slot_by_index: dict[int, int] = {}
+    return [slot_by_index.setdefault(sample["index"], len(slot_by_index)) for sample in samples]
 
 
 def _last_weight_version(sample: dict) -> int:
@@ -169,7 +177,13 @@ def shift_lifecycle(lifecycle: list[dict], shift_s: float) -> list[dict]:
 
 
 def build_sample(
-    calibration_sample: dict, *, index: int, group_index: int, shift_s: float, weight_version_shift: int
+    calibration_sample: dict,
+    *,
+    index: int,
+    group_index: int,
+    rollout_id: int | None,
+    shift_s: float,
+    weight_version_shift: int,
 ) -> Sample:
     """A calibration sample dict as a current-schema ``Sample``, re-indexed and time-shifted.
 
@@ -212,7 +226,7 @@ def build_sample(
             spec_verify_ct=spec_info["spec_verify_ct"],
             completion_tokens=spec_info["completion_token_num"],
         )
-    fields.update(index=index, group_index=group_index)
+    fields.update(index=index, group_index=group_index, rollout_id=rollout_id)
     return Sample.from_dict(fields)
 
 

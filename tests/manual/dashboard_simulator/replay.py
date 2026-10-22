@@ -24,6 +24,7 @@ from tests.manual.dashboard_simulator.calibration import (
     CalibrationRun,
     CalibrationTrajectory,
     build_sample,
+    sample_slots,
     shift_lifecycle,
 )
 from tests.manual.dashboard_simulator.dumps import ActorLayout, TrainDumpWriter
@@ -401,9 +402,13 @@ class Replay:
                 self.schedule_at(trajectory.attempt_end_ts + source_shift_s, self._attempt_end, lifecycle_sample)
         self.schedule_at(consume_ts, self._dump_rollout_step, rollout_id, sources)
 
-    def _sample_index(self, rollout_id: int, replica: int, position: int) -> int:
+    def _sample_index(self, rollout_id: int, replica: int, slot: int) -> int:
         samples_per_replica = self.dump_args.rollout_batch_size // self.replicas * self.dump_args.n_samples_per_prompt
-        return (rollout_id * self.replicas + replica) * samples_per_replica + position
+        assert slot < samples_per_replica, (
+            f"a calibration step holds more than {samples_per_replica} distinct sample indices: "
+            "its widened indices would run into the next replica's"
+        )
+        return (rollout_id * self.replicas + replica) * samples_per_replica + slot
 
     def _lifecycle_sample(
         self,
@@ -415,7 +420,7 @@ class Replay:
         shift_s: float,
     ) -> SimpleNamespace:
         """The fields ``TrajectorySink`` reads off a sample, without its tokens."""
-        index = self._sample_index(rollout_id, replica, trajectory.position)
+        index = self._sample_index(rollout_id, replica, trajectory.slot)
         return SimpleNamespace(
             index=index,
             group_index=index // self.dump_args.n_samples_per_prompt,
@@ -459,12 +464,22 @@ class Replay:
         for replica, (source_rollout_id, source_shift_s) in enumerate(sources):
             messages_by_key = self.calibration.load_messages(source_rollout_id)
             occurrences = defaultdict(int)
-            for position, calibration_sample in enumerate(self.calibration.load_samples(source_rollout_id)):
-                index = self._sample_index(rollout_id, replica, position)
+            # siblings of one rollout share its id: the new index of its first sample
+            new_rollout_id_by_calibration_rollout_id: dict[int, int] = {}
+            calibration_samples = self.calibration.load_samples(source_rollout_id)
+            for slot, calibration_sample in zip(sample_slots(calibration_samples), calibration_samples, strict=True):
+                index = self._sample_index(rollout_id, replica, slot)
+                # dumps from before Sample.rollout_id existed carry no such key
+                calibration_rollout_id = calibration_sample.get("rollout_id")
                 sample = build_sample(
                     calibration_sample,
                     index=index,
                     group_index=index // self.dump_args.n_samples_per_prompt,
+                    rollout_id=(
+                        None
+                        if calibration_rollout_id is None
+                        else new_rollout_id_by_calibration_rollout_id.setdefault(calibration_rollout_id, index)
+                    ),
                     shift_s=source_shift_s,
                     weight_version_shift=rollout_id - source_rollout_id,
                 )
@@ -487,6 +502,7 @@ class Replay:
                 calibration_sample,
                 index=calibration_sample["index"],
                 group_index=calibration_sample["group_index"],
+                rollout_id=calibration_sample.get("rollout_id"),
                 shift_s=0.0,
                 weight_version_shift=rollout_id - calibration_rollout_id,
             )
