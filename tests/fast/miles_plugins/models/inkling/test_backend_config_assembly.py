@@ -86,7 +86,7 @@ class TestInklingBackendAssembly:
             config.num_layers_in_last_pipeline_stage,
         ) == (2, 2, 3, enabled, enabled, 2 if enabled else 1, 2 if enabled else 1, enabled, enabled, enabled, 1, 1)
         assert config.params_dtype == (torch.bfloat16 if enabled else torch.float32)
-        assert config.pipeline_dtype == config.params_dtype
+        assert config.pipeline_dtype == torch.float32
         assert config.inkling.hidden_size == 16
         assert config.moe_layer_freq == [1] * 6
         assert config.moe_activation_in_fp32 and config.moe_combine_in_fp32

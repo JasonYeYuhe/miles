@@ -15,6 +15,15 @@ def _unexpected_gpu_call(*args: object, **kwargs: object) -> None:
 def inkling_model(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     importlib.import_module("megatron.core.models.gpt.gpt_model")
     importlib.import_module("megatron.core.models.gpt.gpt_layer_specs")
+    moe_utils = importlib.import_module("megatron.core.transformer.moe.moe_utils")
+    for name in (
+        "fused_permute",
+        "fused_permute_with_probs",
+        "fused_sort_chunks_by_index",
+        "fused_sort_chunks_by_index_with_probs",
+        "fused_unpermute",
+    ):
+        monkeypatch.setattr(moe_utils, name, _unexpected_gpu_call)
     engine = ModuleType("transformer_engine")
     engine.pytorch = ModuleType("transformer_engine.pytorch")
     layers = ModuleType("miles_plugins.models.inkling.layers")
