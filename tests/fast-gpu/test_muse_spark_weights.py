@@ -1,15 +1,17 @@
+"""The slice loader and mapping of the Muse Spark checkpoint into Megatron tensors; the loader needs Transformer Engine."""
+
 import json
 import math
+import os
+import sys
 from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
 import torch
 from safetensors.torch import save_file
-from tests.fast.backends.megatron_utils.muse_spark_test_utils import build_model_config
+from tests.ci.ci_register import register_cuda_ci
 
-from mbridge import AutoBridge
-from miles_plugins.mbridge.muse_spark import MuseSpark1xBridge
 from miles_plugins.models.muse_spark import checkpoint
 from miles_plugins.models.muse_spark.config import parse_muse_spark_1x_config
 from miles_plugins.models.muse_spark.weight_mapping import (
@@ -17,6 +19,13 @@ from miles_plugins.models.muse_spark.weight_mapping import (
     build_mappings,
     hf_tensor_specs,
     rope_pairs_hf_to_kernel,
+)
+
+sys.path.insert(0, os.path.dirname(__file__))
+from muse_spark_test_utils import build_model_config  # noqa: E402
+
+register_cuda_ci(
+    est_time=120, suite="stage-b-2-gpu-h200", labels=["miles-plugin"], hardware=["hopper", "blackwell"], num_gpus=1
 )
 
 
@@ -159,6 +168,15 @@ def test_slice_loader_preserves_weights_and_fp32_buffers(tmp_path, weight_model,
 
 
 def test_offline_mbridge_entry_uses_slice_loader(tmp_path, weight_model):
+    # Optional dependencies: mbridge, and SGLang's Muse Spark config, which AutoConfig needs for the checkpoint.
+    pytest.importorskip("mbridge")
+    pytest.importorskip("sglang.srt.configs.muse_spark")
+    from mbridge import AutoBridge
+
+    from miles.utils.hf_utils.config import register_hf_config_aliases
+    from miles_plugins.mbridge.muse_spark import MuseSpark1xBridge
+
+    register_hf_config_aliases()
     expected_weights = _write_checkpoint(tmp_path, _build_hf_config())
     bridge = AutoBridge.from_pretrained(str(tmp_path), trust_remote_code=False)
     assert isinstance(bridge, MuseSpark1xBridge)

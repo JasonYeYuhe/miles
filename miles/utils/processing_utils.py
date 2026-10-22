@@ -11,7 +11,7 @@ from huggingface_hub import hf_hub_download
 from tokenizers import Tokenizer as RawTokenizer
 from transformers import AutoProcessor, AutoTokenizer, PreTrainedTokenizerBase, ProcessorMixin
 
-from miles.utils.hf_utils.config import register_hf_config_aliases
+from miles.utils.hf_utils.config import read_checkpoint_model_type, register_hf_config_aliases
 
 logger = logging.getLogger(__name__)
 
@@ -152,9 +152,7 @@ def load_processor(name_or_path: str, **kwargs):
 
         return InklingTrainProcessor(name_or_path)
 
-    from miles.utils.chat_template_utils.muse_spark_omni import is_muse_spark_omni_checkpoint
-
-    if is_muse_spark_omni_checkpoint(name_or_path):
+    if read_checkpoint_model_type(name_or_path) == "muse_spark":
         from miles_plugins.models.muse_spark.vision.processor import MuseSparkTrainProcessor
 
         return MuseSparkTrainProcessor(name_or_path)

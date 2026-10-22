@@ -32,7 +32,7 @@ Run it on every node — 8 × 8 H200 or 4 × 8 B300, on InfiniBand. `--model-dir
 
 ### 3.2 Download + `torch_dist` conversion
 
-The launcher's `prepare` step downloads the checkpoint and the dataset, then converts the checkpoint on all nodes into `<model-dir>/Muse-Spark-Open-816B-A42B_torch_dist` (about 1.6 TB), skipping a finished conversion. With `--vlm` it prepares `hiyouga/geometry3k` instead of `zhuzilin/dapo-math-17k`.
+The launcher's `prepare` step downloads the checkpoint and the dataset, then converts the checkpoint on all nodes into `<model-dir>/Muse-Spark-Open-816B-A42B_torch_dist` (about 1.6 TB), skipping a finished conversion. With `--vlm` it downloads [`chenhegu/geo3k_imgurl`](https://huggingface.co/datasets/chenhegu/geo3k_imgurl) (Geometry3K) instead of `zhuzilin/dapo-math-17k`.
 
 ### 3.3 SGLang
 
@@ -52,14 +52,14 @@ ray start --address <node-0-address>:6379 --num-gpus 8
 
 cd /root/miles
 # math reasoning on DAPO-Math-17k
-MILES_SCRIPT_EXTERNAL_RAY=1 python scripts/run_muse_spark_64xh200.py
+MILES_SCRIPT_EXTERNAL_RAY=1 python scripts/run_muse_spark_open.py
 
 # image-grounded math on Geometry3K
-MILES_SCRIPT_EXTERNAL_RAY=1 python scripts/run_muse_spark_64xh200.py \
+MILES_SCRIPT_EXTERNAL_RAY=1 python scripts/run_muse_spark_open.py \
   --vlm --use-dynamic-sampling-filter --reasoning-effort medium --eval-interval 5
 ```
 
-`scripts/run_muse_spark_32xb300.py` is the same recipe on 4 × 8 B300 and takes the same options.
+The launcher detects the GPU and picks the layout and engine sizing of `--hardware H200` (8 × 8) or `--hardware B300` (4 × 8); every other option is shared.
 
 | Mode | GPUs | Rollout | Training | Weight sync | `train/train_rollout_logprob_abs_diff` |
 |---|---|---|---|---|---|
@@ -84,10 +84,10 @@ python tools/convert_muse_spark_torch_dist_to_hf.py \
 
 ### 5.1 Parallelism
 
-| Launcher | TP | PP | CP | EP | expert-TP | first/last stage layers | `max_tokens_per_gpu` |
-|---|---|---|---|---|---|---|---|
-| `run_muse_spark_64xh200.py` | 8 | 8 | 1 | 8 | 1 | 7 | 4096 |
-| `run_muse_spark_32xb300.py` | 8 | 4 | 1 | 8 | 1 | 15 | 8192 |
+| `--hardware` | Nodes | TP | PP | CP | EP | expert-TP | first/last stage layers | `max_tokens_per_gpu` |
+|---|---|---|---|---|---|---|---|---|
+| `H200` | 8 | 8 | 8 | 1 | 8 | 1 | 7 | 4096 |
+| `B300` | 4 | 8 | 4 | 1 | 8 | 1 | 15 | 8192 |
 
 `--sequence-parallel`, THD packing (`--use-dynamic-batch-size`) and full recomputation are on.
 

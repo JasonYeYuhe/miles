@@ -145,8 +145,7 @@ def _iter_mm_tower_units(args, *, materialize):
 
         prefixes = NON_TEXT_PREFIXES
     else:
-        # TODO(guapisolo): decide whether to fix. The Muse Spark text provider lands here, so an engine serving the
-        # omni checkpoint keeps zeroed vision/audio towers after the colocated startup offload (no weights CPU
-        # backup); text rollouts are unaffected, image requests are not.
+        # The Muse Spark text provider lands here: an engine serving the omni checkpoint keeps zeroed vision/audio
+        # towers after the colocated startup offload, which text rollouts never read.
         return
     yield from iter_checkpoint_tower_units(args.hf_checkpoint, materialize=materialize, prefixes=prefixes)

@@ -9,15 +9,19 @@ from types import SimpleNamespace
 import pytest
 import torch
 from safetensors.torch import save_file
+from tests.ci.ci_register import register_cuda_ci
 
 from miles_plugins.models.muse_spark import checkpoint
 from miles_plugins.models.muse_spark.config import map_to_megatron_fields, parse_muse_spark_1x_config
-from miles_plugins.models.muse_spark.hf_config import MuseSparkHFConfig
 from miles_plugins.models.muse_spark.weight_mapping import (
     build_mappings,
     hf_tensor_specs,
     rope_pairs_hf_to_kernel,
     rope_pairs_kernel_to_hf,
+)
+
+register_cuda_ci(
+    est_time=120, suite="stage-b-2-gpu-h200", labels=["miles-plugin"], hardware=["hopper", "blackwell"], num_gpus=1
 )
 
 HIDDEN, LAYERS, HEADS, KV_HEADS, HEAD_DIM, VOCAB, EXPERTS = 16, 4, 4, 2, 4, 32, 4
@@ -320,20 +324,17 @@ def test_load_hf_checkpoint_ignores_non_text_tensors_and_rejects_wrong_names(tmp
         checkpoint.load_hf_checkpoint(_WeightOnlyModel(spark), bad)
 
 
-def test_hf_config_class_exposes_flat_view(tmp_path):
-    config = MuseSparkHFConfig(**checkpoint_config())
-    assert (config.hidden_size, config.num_hidden_layers, config.vocab_size) == (HIDDEN, LAYERS, VOCAB)
-    assert (config.num_attention_heads, config.head_dim, config.rope_theta) == (HEADS, HEAD_DIM, 500000.0)
-    assert not hasattr(config, "text_config")
-    assert config.to_dict()["text_config"]["layer_types"][0] == "sliding_attention"
-    assert config.to_dict()["model_type"] == "muse_spark"
-    assert config.architectures == ["MuseSparkForConditionalGeneration"]
-    assert parse_muse_spark_1x_config(config.to_dict()) == parse_muse_spark_1x_config(checkpoint_config())
-    assert MuseSparkHFConfig().model_type == "muse_spark"  # transformers builds a default instance for diffs
-    from miles.utils.chat_template_utils.muse_spark_omni import is_muse_spark_omni_checkpoint
+def test_sglang_config_drives_processor_converter_and_bridge_dispatch(tmp_path):
+    pytest.importorskip("sglang.srt.configs.muse_spark")
+    from miles.backends.megatron_utils.megatron_to_hf import converter_model_name
+    from miles.utils.hf_utils.config import load_hf_config, read_checkpoint_model_type
 
     (tmp_path / "config.json").write_text(json.dumps(checkpoint_config()))
-    assert is_muse_spark_omni_checkpoint(str(tmp_path))
+    config = load_hf_config(str(tmp_path))
+    # load_processor, _convert_to_hf_core and the MuseSpark1xBridge registration dispatch on these.
+    assert read_checkpoint_model_type(str(tmp_path)) == config.model_type == "muse_spark"
+    assert converter_model_name(SimpleNamespace(model_name=None), config) == "musespark1xomniconfig"
+    assert (config.text_config.hidden_size, config.text_config.num_hidden_layers) == (HIDDEN, LAYERS)
 
 
 def test_raw_export_uses_checkpoint_names(tmp_path):

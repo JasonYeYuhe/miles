@@ -1,4 +1,4 @@
-"""Full 62-layer Muse Spark text model; the launcher supplies parallelism and attention backend.
+"""Full 62-layer Muse Spark Open text model; the launcher supplies parallelism and attention backend.
 
 ``num_layers`` serves the last-N-layer partials, whose schedules also count from the top.
 """

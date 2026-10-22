@@ -1,17 +1,19 @@
-"""Train full Muse Spark with GRPO: DAPO-Math-17k, or Geometry3K images with --vlm.
+"""Train Muse Spark Open with GRPO: DAPO-Math-17k, or Geometry3K images with --vlm.
 
-The recipe is shared by the entry points scripts/run_muse_spark_<gpus>x<hardware>.py, which set the cluster size,
-parallelism and engine sizing; this module only inserts those values. Requires storage shared by all nodes under model_dir (and under output_dir to save weights), and
-Muse-enabled Megatron/SGLang on every node. A multi-node run joins the Ray cluster before running with
+Requires storage shared by all nodes under model_dir (and under output_dir to save weights), and Muse-enabled
+Megatron/SGLang on every node. A multi-node run joins the Ray cluster before running with
 MILES_SCRIPT_EXTERNAL_RAY=1; a one-node run starts its own. The first run downloads the HF checkpoint and converts
-it into an adjacent _torch_dist release.
-Adam streams optimizer state to node-local NVMe; Muon keeps state/master weights on CPU and computes
-updates in GPU chunks. Each rollout performs one update.
+it into an adjacent _torch_dist release. Adam streams optimizer state to node-local NVMe; Muon keeps state/master
+weights on CPU and computes updates in GPU chunks. Each rollout performs one update.
 
 Args:
-    model_org / model_dir / model_name: HF repository <model_org>/<model_name>, downloaded to
-        <model_dir>/<model_name>; its _torch_dist release is written next to it.
+    model_name: Muse-Spark-Open-816B-A42B, or the last-four-layer partial Muse-Spark-Open-last4-partial, which runs
+        on one node (TP and EP of half the node over two pipeline stages, one engine for the node).
+    model_org / model_dir: HF organization (defaults to the model's own) and the root the checkpoint is downloaded
+        to as <model_dir>/<model_name>; its _torch_dist release is written next to it.
     data_dir / output_dir: Dataset root and run output root.
+    hardware: H200 (8 nodes) or B300 (4 nodes); auto detects it. Selects the defaults of the layout and engine
+        fields below.
     num_nodes / num_gpus_per_node: Cluster size.
     tensor/pipeline/context/expert_model_parallel_size, decoder_first_last_pipeline_num_layers: Training layout;
         the last is the decoder layer count of the first and of the last pipeline stage.
@@ -20,6 +22,7 @@ Args:
     offload_train_disk_dir: Node-local NVMe for Adam's streamed optimizer state; unset keeps the Miles
         default under $SCRATCH (/scratch).
     num_rollout / rollout_batch_size / n_samples_per_prompt: Rollouts, prompts per rollout, samples per prompt.
+    rm_type: Reward model; math by default.
     use_dynamic_sampling_filter: Keep only nonconstant-reward groups.
     rollout_max_response_len / rollout_max_context_len: Response and prompt-plus-response token limits.
     max_tokens_per_gpu: Token budget per GPU of a dynamic training batch.
@@ -28,34 +31,43 @@ Args:
     pin_rollout_manager_to_head: Run the rollout executor, router and session servers on the Ray head node.
     log_probs_chunk_size: Defaults 4096; -1 disables log-prob chunking.
     sglang_text_only: Serve only the language model from the omni checkpoint; defaults False.
-    vlm: Train on geo3k images instead of DAPO-Math (frozen vision tower); defaults False.
-    eval_interval / n_samples_per_eval_prompt: geo3k test-split eval cadence (vlm only) and samples per prompt.
+    vlm: Train on Geometry3K (chenhegu/geo3k_imgurl) images instead of DAPO-Math, with the vision tower frozen;
+        defaults False.
+    eval_interval / n_samples_per_eval_prompt: Geometry3K test-split eval cadence (vlm only) and samples per prompt.
     reasoning_effort: Optional chat-template override.
     save_interval: Save the weights without optimizer state every N rollouts and after the last one, under
         <run_dir>/checkpoints on storage shared by all nodes. After training, the last save is converted
         on CPU into an HF checkpoint in the released layout under <run_dir>/hf;
         tools/convert_muse_spark_torch_dist_to_hf.py converts any other save. Defaults None: nothing is saved.
     extra_args / extra_env_vars: Additional training flags and runtime environment.
-    partial: Smoke-test the recipe on one node with the last-four-layer checkpoint
-        RadixArk/Muse-Spark-Open-last4-partial. Replaces the model, the cluster size, the layout (TP and EP of half
-        the node over two pipeline stages, one engine for the node) and the rollout sizes (3 rollouts of 4x4
-        samples); rewards are random and --ci-test checks log-probs and weight updates. Defaults False.
+
+Example:
+    MILES_SCRIPT_EXTERNAL_RAY=1 python scripts/run_muse_spark_open.py
+    MILES_SCRIPT_EXTERNAL_RAY=1 python scripts/run_muse_spark_open.py --hardware B300 --optimizer muon
+    python scripts/run_muse_spark_open.py --model-name Muse-Spark-Open-last4-partial --num-rollout 3 \\
+        --rollout-batch-size 4 --n-samples-per-prompt 4
 """
 
 import json
 import shlex
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Literal
 
-import miles.utils.external_utils.command_utils.legacy as U
+import typer
+
+import miles.utils.external_utils.command_utils as U
+
+_MODEL_ORG = {"Muse-Spark-Open-816B-A42B": "meta-models", "Muse-Spark-Open-last4-partial": "RadixArk"}
+_MEGATRON_MODEL_TYPE = {
+    "Muse-Spark-Open-816B-A42B": "muse-spark-open",
+    "Muse-Spark-Open-last4-partial": "muse-spark-open-last4-partial",
+}
 
 
-@dataclass(kw_only=True)
-class ScriptArgs(U.ExecuteTrainConfig):
-    # Set by the entry point for its hardware and GPU count.
+@dataclass(frozen=True)
+class _Recipe:
     num_nodes: int
-    num_gpus_per_node: int
     tensor_model_parallel_size: int
     pipeline_model_parallel_size: int
     context_parallel_size: int
@@ -67,20 +79,76 @@ class ScriptArgs(U.ExecuteTrainConfig):
     # Per engine; SGLang splits it across attention-DP ranks when --sglang-dp-size > 1.
     sglang_max_running_requests: int
     sglang_cuda_graph_bs_decode: tuple[int, ...]
-    # Runs the rollout executor, router and session servers on the Ray head node.
     pin_rollout_manager_to_head: bool
-    run_id: str = field(default_factory=U.create_run_id)
-    model_org: str = "meta-models"
-    model_name: str = "Muse-Spark-Open-816B-A42B"
-    megatron_model_type: str = "muse-spark-full"
+
+
+# The full model's recipe per hardware, from 30-step runs on each.
+_RECIPES = {
+    # TP8/PP8 with 7 layers on each edge stage, and four engines of two nodes each.
+    # TP4/PP8/CP2 (7) and TP4/PP4/CP4/EP16 (15) also fit.
+    "H200": _Recipe(
+        num_nodes=8,
+        tensor_model_parallel_size=8,
+        pipeline_model_parallel_size=8,
+        context_parallel_size=1,
+        expert_model_parallel_size=8,
+        decoder_first_last_pipeline_num_layers=7,
+        rollout_num_gpus_per_engine=16,
+        max_tokens_per_gpu=4096,
+        sglang_mem_fraction_static=0.8,
+        sglang_max_running_requests=64,
+        sglang_cuda_graph_bs_decode=(1, 2, 4, 8, 16, 32, 64),
+        pin_rollout_manager_to_head=False,
+    ),
+    # TP8/PP4 with 15/16/16/15 layers per stage, and one engine per node: 288 GB per GPU holds the model on 8 GPUs.
+    # The KV pool at 0.83 covers 128 running requests per engine, all 512 samples of a rollout across 4 engines.
+    "B300": _Recipe(
+        num_nodes=4,
+        tensor_model_parallel_size=8,
+        pipeline_model_parallel_size=4,
+        context_parallel_size=1,
+        expert_model_parallel_size=8,
+        decoder_first_last_pipeline_num_layers=15,
+        rollout_num_gpus_per_engine=8,
+        max_tokens_per_gpu=8192,
+        sglang_mem_fraction_static=0.83,
+        sglang_max_running_requests=128,
+        sglang_cuda_graph_bs_decode=(1, 2, 4, 8, 16, 32, 48, 64, 96, 128),
+        pin_rollout_manager_to_head=True,
+    ),
+}
+
+
+@dataclass
+class ScriptArgs(U.ExecuteTrainConfig):
+    run_id: str = U.create_run_id()
+    model_name: Literal["Muse-Spark-Open-816B-A42B", "Muse-Spark-Open-last4-partial"] = "Muse-Spark-Open-816B-A42B"
+    model_org: str | None = None
     model_dir: str = "/root/models"
     data_dir: str = "/root/datasets"
     megatron_path: str = "/root/Megatron-LM"
+    hardware: Literal["auto", "H200", "B300"] = "auto"
+    # None (an empty tuple for the graph batch sizes) takes the hardware recipe's value; the partial replaces the
+    # recipe's layout with its own.
+    num_nodes: int | None = None
+    num_gpus_per_node: int | None = None
+    tensor_model_parallel_size: int | None = None
+    pipeline_model_parallel_size: int | None = None
+    context_parallel_size: int | None = None
+    expert_model_parallel_size: int | None = None
+    decoder_first_last_pipeline_num_layers: int | None = None
+    rollout_num_gpus_per_engine: int | None = None
+    max_tokens_per_gpu: int | None = None
+    sglang_mem_fraction_static: float | None = None
+    sglang_max_running_requests: int | None = None
+    sglang_cuda_graph_bs_decode: tuple[int, ...] = ()
+    pin_rollout_manager_to_head: bool | None = None
     optimizer: Literal["adam", "muon"] = "adam"
     learning_rate: float = 1e-6
     num_rollout: int = 30
     rollout_batch_size: int = 32
     n_samples_per_prompt: int = 16
+    rm_type: str = "math"
     use_dynamic_sampling_filter: bool = False
     rollout_max_response_len: int = 4096
     rollout_max_context_len: int = 8192
@@ -94,34 +162,40 @@ class ScriptArgs(U.ExecuteTrainConfig):
     sglang_enable_dp_attention: bool = False
     # Serve only the language model (skips the vision/audio towers of the omni checkpoint).
     sglang_text_only: bool = False
-    # Image-grounded math on geo3k (scripts/muse_spark/prepare_geo3k.py under data_dir/geo3k): the
-    # omni provider runs the frozen NaViT tower on the first pipeline stage, and the weight iterator re-sends the
-    # towers from the HF checkpoint after every update.
+    # Image-grounded math on Geometry3K: the omni provider runs the frozen NaViT tower on the first pipeline stage,
+    # and the weight iterator re-sends the towers from the HF checkpoint after every update.
     vlm: bool = False
     eval_interval: int | None = None
     n_samples_per_eval_prompt: int = 4
     save_interval: int | None = None
     extra_args: str = ""
-    partial: bool = False
 
     def __post_init__(self):
-        if self.partial:
-            self.model_org, self.model_name = "RadixArk", "Muse-Spark-Open-last4-partial"
-            self.megatron_model_type = "muse-spark-last4-partial"
-            self.num_nodes = 1
+        self.hardware = U.resolve_hardware(self)
+        self.num_gpus_per_node = self.num_gpus_per_node or U.NUM_GPUS_OF_HARDWARE[self.hardware]
+        if self.model_org is None:
+            self.model_org = _MODEL_ORG[self.model_name]
+        defaults = asdict(_RECIPES[self.hardware])
+        if self.is_partial:
             # PP1 cannot take the edge-stage sizes, so the 4 layers go 2 + 2 over two stages.
-            self.pipeline_model_parallel_size, self.decoder_first_last_pipeline_num_layers = 2, 2
-            self.tensor_model_parallel_size = self.expert_model_parallel_size = self.num_gpus_per_node // 2
-            self.context_parallel_size = 1
-            self.rollout_num_gpus_per_engine = self.num_gpus_per_node
-            self.num_rollout, self.rollout_batch_size, self.n_samples_per_prompt = 3, 4, 4
-            self.rollout_max_response_len, self.rollout_max_context_len = 1024, 4096
+            defaults.update(
+                num_nodes=1,
+                tensor_model_parallel_size=self.num_gpus_per_node // 2,
+                pipeline_model_parallel_size=2,
+                context_parallel_size=1,
+                expert_model_parallel_size=self.num_gpus_per_node // 2,
+                decoder_first_last_pipeline_num_layers=2,
+                rollout_num_gpus_per_engine=self.num_gpus_per_node,
+            )
+        for field in fields(_Recipe):
+            if getattr(self, field.name) in (None, ()):
+                setattr(self, field.name, defaults[field.name])
         if self.optimizer == "muon" and self.offload_train_disk_dir is not None:
             raise ValueError("--offload-train-disk-dir requires --optimizer adam")
         if self.vlm and self.sglang_text_only:
             raise ValueError("--vlm needs the omni engine; drop --sglang-text-only")
         if self.eval_interval is not None and not self.vlm:
-            raise ValueError("--eval-interval evaluates the geo3k test split and needs --vlm")
+            raise ValueError("--eval-interval evaluates the Geometry3K test split and needs --vlm")
         if self.chat_template_path is None:
             # The checkpoint's template renders an image part as a bare <|patch|>; the repo template renders the
             # <image> placeholder the train processor expands (its text rendering is identical).
@@ -130,6 +204,18 @@ class ScriptArgs(U.ExecuteTrainConfig):
                 if self.vlm
                 else f"{self.model_dir}/{self.model_name}/chat_template.jinja"
             )
+
+    @property
+    def is_partial(self) -> bool:
+        return self.model_name == "Muse-Spark-Open-last4-partial"
+
+    @property
+    def megatron_model_type(self) -> str:
+        return _MEGATRON_MODEL_TYPE[self.model_name]
+
+    @property
+    def hf_checkpoint(self) -> Path:
+        return Path(self.model_dir) / self.model_name
 
     @property
     def run_dir(self) -> str:
@@ -149,14 +235,16 @@ def _model_parallel_args(tp: int, pp: int, cp: int, ep: int, edge_layers: int) -
 
 
 def prepare(args: ScriptArgs):
-    hf_checkpoint = Path(args.model_dir) / args.model_name
+    backend = args.create_backend()
     # hf download skips files that are already complete.
-    U.exec_command_cpu(f"hf download {args.model_org}/{args.model_name} --local-dir {shlex.quote(str(hf_checkpoint))}")
+    backend.exec_command_cpu(
+        f"hf download {args.model_org}/{args.model_name} --local-dir {shlex.quote(str(args.hf_checkpoint))}"
+    )
     # Converts on every node into <model_dir>/<model_name>_torch_dist (through Ray when there are several);
     # skipped once that release exists. The release loads into any layout. Tensor/context parallelism would need
     # CUDA_DEVICE_MAX_CONNECTIONS=1 on every node, so the conversion keeps only the pipeline and expert split of
     # the training layout.
-    U.convert_checkpoint(
+    backend.convert_checkpoint(
         model_name=args.model_name,
         megatron_model_type=args.megatron_model_type,
         num_gpus_per_node=args.num_gpus_per_node,
@@ -170,47 +258,42 @@ def prepare(args: ScriptArgs):
             edge_layers=args.decoder_first_last_pipeline_num_layers,
         ),
         dir_dst=args.model_dir,
-        hf_checkpoint=str(hf_checkpoint),
+        hf_checkpoint=str(args.hf_checkpoint),
         megatron_path=args.megatron_path,
     )
-    if not args.vlm:
-        U.hf_download_dataset("zhuzilin/dapo-math-17k", data_dir=args.data_dir)
-        return
-    script = Path(__file__).resolve().parent / "prepare_geo3k.py"
-    for split in ("train", "test"):
-        U.exec_command_cpu(
-            f"python3 {shlex.quote(str(script))} --out {shlex.quote(str(Path(args.data_dir) / 'geo3k'))} "
-            f"--split {split} --max-samples 1000000"
-        )
+    if args.vlm:
+        backend.hf_download_dataset("chenhegu/geo3k_imgurl", data_dir=args.data_dir)
+    else:
+        backend.hf_download_dataset("zhuzilin/dapo-math-17k", data_dir=args.data_dir)
 
 
-def execute(args: ScriptArgs, entry_script: str):
+def execute(args: ScriptArgs):
     ckpt_args = (
-        f"--hf-checkpoint {shlex.quote(str(Path(args.model_dir) / args.model_name))} "
-        f"--ref-load {shlex.quote(str(Path(args.model_dir) / (args.model_name + '_torch_dist')))} "
+        f"--hf-checkpoint {shlex.quote(str(args.hf_checkpoint))} "
+        f"--ref-load {shlex.quote(str(args.hf_checkpoint) + '_torch_dist')} "
         f"--load {shlex.quote(args.run_dir + '/checkpoints')} "
     )
     if args.save_interval is not None:
         ckpt_args += f"--save {shlex.quote(args.run_dir + '/checkpoints')} --save-interval {args.save_interval} "
-    geo3k = Path(args.data_dir) / "geo3k"
+    geo3k = Path(args.data_dir) / "geo3k_imgurl"
     if args.vlm:
         rollout_args = (
-            f"--prompt-data {shlex.quote(str(geo3k / 'train_rl.jsonl'))} "
-            "--input-key messages "
+            f"--prompt-data {shlex.quote(str(geo3k / 'train.parquet'))} "
+            "--input-key problem "
+            "--label-key answer "
             f"--multimodal-keys {shlex.quote(json.dumps({'image': 'images'}))} "
         )
     else:
         rollout_args = (
             f"--prompt-data {shlex.quote(str(Path(args.data_dir) / 'dapo-math-17k/dapo-math-17k.jsonl'))} "
             "--input-key prompt "
+            "--label-key label "
         )
     rollout_args += (
-        "--label-key label "
         "--apply-chat-template "
         f"--chat-template-path {shlex.quote(args.chat_template_path)} "
         "--rollout-shuffle "
-        # The partial's text is meaningless: a math reward would be all zeros and no update would move the weights.
-        f"--rm-type {'deterministic_random' if args.partial else 'math'} "
+        f"--rm-type {args.rm_type} "
         "--rollout-temperature 1 "
         f"--num-rollout {args.num_rollout} --rollout-batch-size {args.rollout_batch_size} "
         f"--n-samples-per-prompt {args.n_samples_per_prompt} "
@@ -231,7 +314,7 @@ def execute(args: ScriptArgs, entry_script: str):
         rollout_args += f"--apply-chat-template-kwargs {shlex.quote(template_kwargs)} "
     if args.eval_interval is not None:
         rollout_args += (
-            f"--eval-prompt-data geo3k {shlex.quote(str(geo3k / 'test_rl.jsonl'))} "
+            f"--eval-prompt-data geo3k {shlex.quote(str(geo3k / 'test.parquet'))} "
             f"--eval-interval {args.eval_interval} --n-samples-per-eval-prompt {args.n_samples_per_eval_prompt} "
         )
     grpo_args = (
@@ -267,6 +350,51 @@ def execute(args: ScriptArgs, entry_script: str):
     )
     if args.use_dynamic_batch_size:
         perf_args += f"--use-dynamic-batch-size --max-tokens-per-gpu {args.max_tokens_per_gpu} "
+    optimizer_args = _optimizer_args(args)
+    sglang_args = _sglang_args(args)
+    if args.vlm:
+        # Overrides the text provider of the model args, which precede the train args.
+        misc_args = (
+            "--custom-model-provider-path miles_plugins.models.muse_spark.provider.muse_spark_1x_omni_model_provider "
+        )
+    else:
+        misc_args = ""
+    misc_args += (
+        f"--actor-num-nodes {args.num_nodes} "
+        f"--actor-num-gpus-per-node {args.num_gpus_per_node} "
+        f"--num-gpus-per-node {args.num_gpus_per_node} "
+        f"--update-weight-buffer-size {args.update_weight_buffer_size} "
+    )
+    if args.pin_rollout_manager_to_head:
+        misc_args += "--pin-rollout-manager-to-head "
+
+    train_args = (
+        f"{ckpt_args} "
+        f"{rollout_args} "
+        f"{perf_args} "
+        f"{grpo_args} "
+        f"{optimizer_args} "
+        f"{sglang_args} "
+        f"{misc_args} "
+        f"{U.get_default_wandb_args(__file__, run_id=args.run_id)} "
+        f"{args.extra_args} "
+    )
+
+    args.create_backend().execute_train(
+        train_args=train_args,
+        config=args,
+        num_gpus_per_node=args.num_gpus_per_node,
+        megatron_model_type=args.megatron_model_type,
+        megatron_path=args.megatron_path,
+        extra_env_vars={
+            "NVTE_ALLOW_NONDETERMINISTIC_ALGO": "1",
+            "TORCHINDUCTOR_COMPILE_THREADS": "1",
+            "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:False",
+        },
+    )
+
+
+def _optimizer_args(args: ScriptArgs) -> str:
     optimizer_args = (
         f"--optimizer {'adam' if args.optimizer == 'adam' else 'dist_muon'} "
         f"--lr {args.learning_rate} --min-lr {args.learning_rate} "
@@ -300,6 +428,10 @@ def execute(args: ScriptArgs, entry_script: str):
             "--optimizer-state-offload-chunk-size-mb 256 "
             "--chunked-muon-master-weights "
         )
+    return optimizer_args
+
+
+def _sglang_args(args: ScriptArgs) -> str:
     sglang_args = (
         "--colocate "
         "--offload-train "
@@ -325,70 +457,28 @@ def execute(args: ScriptArgs, entry_script: str):
         # the language model only; otherwise it looks for a multimodal processor of the text architecture.
         text_only = json.dumps({"architectures": ["MuseSpark1xForCausalLM"]})
         sglang_args += f"--sglang-json-model-override-args {shlex.quote(text_only)} --sglang-language-model-only "
-    if args.vlm:
-        # Overrides the text provider of the model args, which precede the train args.
-        misc_args = (
-            "--custom-model-provider-path miles_plugins.models.muse_spark.provider.muse_spark_1x_omni_model_provider "
-        )
-    else:
-        misc_args = ""
-    misc_args += (
-        f"--actor-num-nodes {args.num_nodes} "
-        f"--actor-num-gpus-per-node {args.num_gpus_per_node} "
-        f"--num-gpus-per-node {args.num_gpus_per_node} "
-        f"--update-weight-buffer-size {args.update_weight_buffer_size} "
-    )
-    if args.pin_rollout_manager_to_head:
-        misc_args += "--pin-rollout-manager-to-head "
-    if args.partial:
-        misc_args += "--ci-test "
-        if not args.vlm:
-            # The text recipe's colocated engines zero the omni towers at startup and never receive them again.
-            misc_args += (
-                "--check-weight-update-skip-list "
-                "model.vision_tower. model.vision_adapter. model.vision_projection. model.audio_tower. "
-            )
-
-    train_args = (
-        f"{ckpt_args} "
-        f"{rollout_args} "
-        f"{perf_args} "
-        f"{grpo_args} "
-        f"{optimizer_args} "
-        f"{sglang_args} "
-        f"{misc_args} "
-        f"{U.get_default_wandb_args(entry_script, run_id=args.run_id)} "
-        f"{args.extra_args} "
-    )
-
-    U.execute_train(
-        train_args=train_args,
-        config=args,
-        num_gpus_per_node=args.num_gpus_per_node,
-        megatron_model_type=args.megatron_model_type,
-        megatron_path=args.megatron_path,
-        extra_env_vars={
-            "NVTE_ALLOW_NONDETERMINISTIC_ALGO": "1",
-            "TORCHINDUCTOR_COMPILE_THREADS": "1",
-            "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:False",
-        },
-    )
+    return sglang_args
 
 
 def export_hf(args: ScriptArgs):
     # The last save is iteration num_rollout - 1; the conversion runs on CPU once training has finished.
     last_save = f"{args.run_dir}/checkpoints/iter_{args.num_rollout - 1:07d}"
-    U.exec_command_cpu(
+    args.create_backend().exec_command_cpu(
         f"PYTHONPATH={shlex.quote(f'{U.repo_base_dir}:{args.megatron_path}')}${{PYTHONPATH:+:$PYTHONPATH}} "
         f"python3 {shlex.quote(str(U.repo_base_dir / 'tools/convert_muse_spark_torch_dist_to_hf.py'))} "
         f"--input-dir {shlex.quote(last_save)} "
-        f"--hf-checkpoint {shlex.quote(str(Path(args.model_dir) / args.model_name))} "
+        f"--hf-checkpoint {shlex.quote(str(args.hf_checkpoint))} "
         f"--output-dir {shlex.quote(args.run_dir + '/hf')}"
     )
 
 
-def run(args: ScriptArgs, entry_script: str):
+@U.dataclass_cli
+def main(args: ScriptArgs):
     prepare(args)
-    execute(args, entry_script)
+    execute(args)
     if args.save_interval is not None:
         export_hf(args)
+
+
+if __name__ == "__main__":
+    typer.run(main)

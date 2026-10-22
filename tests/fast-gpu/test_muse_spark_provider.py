@@ -1,18 +1,15 @@
-"""CPU checks for the Muse Spark raw provider and the Miles forward boundary."""
+"""Checks for the Muse Spark raw provider and the Miles forward boundary; its layers need Transformer Engine."""
 
 import json
 import math
 import os
+import sys
 from dataclasses import replace
 from itertools import accumulate
 from types import SimpleNamespace
 
 import pytest
 import torch
-
-pytest.importorskip("megatron.core")
-pytest.importorskip("transformer_engine.pytorch")
-
 from megatron.core.models.common.embeddings.rotary_pos_embedding import RotaryEmbedding
 from megatron.core.models.common.language_module.language_module import LanguageModule
 from megatron.core.models.gpt.gpt_model import GPTModel
@@ -24,7 +21,7 @@ from megatron.core.transformer.moe import moe_utils
 from megatron.core.transformer.spec_utils import build_module
 from megatron.core.transformer.transformer_block import TransformerBlock
 from megatron.core.transformer.transformer_layer import get_transformer_layer_offset
-from tests.fast.backends.megatron_utils.muse_spark_test_utils import build_model_config
+from tests.ci.ci_register import register_cuda_ci
 
 from miles.backends.megatron_utils.parallel import get_packed_seq_params
 from miles.backends.training_utils import parallel as training_parallel
@@ -35,6 +32,13 @@ from miles_plugins.models.muse_spark.model import MuseSpark1xGPTModel
 from miles_plugins.models.muse_spark.ops.moe import MuseSpark1xTopKRouter
 from miles_plugins.models.muse_spark.ops.norms import MuseSpark1xRMSNorm, MuseSpark1xRMSNormWithInputScale
 from miles_plugins.models.muse_spark.spec import get_muse_spark_1x_spec
+
+sys.path.insert(0, os.path.dirname(__file__))
+from muse_spark_test_utils import build_model_config  # noqa: E402
+
+register_cuda_ci(
+    est_time=300, suite="stage-b-2-gpu-h200", labels=["miles-plugin"], hardware=["hopper", "blackwell"], num_gpus=1
+)
 
 
 def _checkpoint_config(num_hidden_layers, **overrides):

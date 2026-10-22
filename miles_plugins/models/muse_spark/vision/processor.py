@@ -17,6 +17,8 @@ Outputs (all concatenable along dim 0 by ``data.py``):
 
 from __future__ import annotations
 
+import base64
+import io
 import json
 import os
 from functools import lru_cache
@@ -94,20 +96,21 @@ def preprocess_image(image: Any, config: MuseSparkVisionConfig) -> tuple[torch.T
 
 
 def _load_pil_image(spec: Any) -> Image.Image:
-    """Resolve one image content part's payload to PIL (no resize); URLs must be resolved upstream."""
+    """Resolve one image content part's payload to PIL (no resize); http(s) URLs must be resolved upstream."""
     if isinstance(spec, Image.Image):
         return spec
     if isinstance(spec, dict):
         spec = spec.get("url", spec.get("path"))
+    if isinstance(spec, str) and spec.startswith("data:"):
+        # A base64 data URI, as the geo3k_imgurl dataset stores its images.
+        spec = base64.b64decode(spec.partition(",")[2])
     if isinstance(spec, (bytes, bytearray)):
-        import io
-
         image = Image.open(io.BytesIO(bytes(spec)))
         image.load()
         return image
     if isinstance(spec, str):
         path = spec[len("file://") :] if spec.startswith("file://") else spec
-        if path.startswith(("http://", "https://", "data:")):
+        if path.startswith(("http://", "https://")):
             raise ValueError(f"Muse Spark extract_media: resolve URL images upstream, got {spec[:64]!r}")
         image = Image.open(path)
         image.load()

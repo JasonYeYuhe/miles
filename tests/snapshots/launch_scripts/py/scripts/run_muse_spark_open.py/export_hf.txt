@@ -1,0 +1,5 @@
+### 0
+PYTHONPATH=<REPO_ROOT>:/root/Megatron-LM${PYTHONPATH:+:$PYTHONPATH} python3 <REPO_ROOT>/tools/convert_muse_spark_torch_dist_to_hf.py
+  --input-dir /root/shared_data/260101-000000-000/checkpoints/iter_0000029
+  --hf-checkpoint <SANDBOX>/models/Muse-Spark-Open-816B-A42B
+  --output-dir /root/shared_data/260101-000000-000/hf

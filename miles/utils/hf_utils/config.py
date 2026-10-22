@@ -11,14 +11,15 @@ local checkpoint. It supports 2 customizations:
 The default behavior is exactly the same as `AutoConfig.from_pretrained`.
 """
 
+import functools
 import importlib
+import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 from transformers import AutoConfig, AutoModelForCausalLM
 from transformers.models.auto.configuration_auto import CONFIG_MAPPING_NAMES
-
-from miles_plugins.models.muse_spark.hf_config import register_muse_spark_config
 
 
 @dataclass(frozen=True)
@@ -110,8 +111,28 @@ def register_hf_config_aliases() -> None:
         import sglang.srt.configs.inkling  # noqa: F401
     except ImportError:
         pass
+    try:
+        import sglang.srt.configs.muse_spark  # noqa: F401
+    except ImportError:
+        pass
 
-    register_muse_spark_config()
+
+@functools.cache
+def read_checkpoint_model_type(name_or_path: str) -> str:
+    """The ``model_type`` in a local checkpoint's config.json, or "" when it has none."""
+    if not name_or_path:
+        return ""
+    config_path = os.path.join(name_or_path, "config.json")
+    if not os.path.isfile(config_path):
+        return ""
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            config = json.load(f)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return ""
+    if not isinstance(config, dict):
+        return ""
+    return config.get("model_type", "") or ""
 
 
 def load_hf_config(

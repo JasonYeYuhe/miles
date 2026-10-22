@@ -47,7 +47,7 @@ def convert_to_hf_names(args, model_name, name, param) -> list[str]:
 
 def _convert_to_hf_core(args, model_name, name, param):
     model_name = model_name.lower()
-    if model_name in {"musesparkhfconfig", "muse_spark"}:
+    if model_name == "musespark1xomniconfig":
         converted_named_tensors = convert_muse_spark_1x_to_hf(args, name, param)
     elif "glm5_next" in model_name or "glm5next" in model_name:
         converted_named_tensors = convert_glm5_next_to_hf(args, name, param)

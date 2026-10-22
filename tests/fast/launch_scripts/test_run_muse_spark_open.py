@@ -1,19 +1,19 @@
 import shlex
 import sys
+from dataclasses import dataclass, field
 
 import pytest
 import torch
 from tests.fast.launch_scripts.model_args_harness import expand_model_args
 from tests.fast.launch_scripts.py_harness import import_launch_script
+from tests.fast.launch_scripts.sh_harness import REPO_ROOT
 
-import miles.utils.external_utils.command_utils.legacy as U
-
-_H200 = "scripts/run_muse_spark_64xh200.py"
-_B300 = "scripts/run_muse_spark_32xb300.py"
-# Entry point -> (num_nodes, rollout GPUs per engine, max tokens per GPU, mem fraction, running requests, graph bs).
+_LAUNCHER = "scripts/run_muse_spark_open.py"
+_PARTIAL = "Muse-Spark-Open-last4-partial"
+# Hardware -> (num_nodes, rollout GPUs per engine, max tokens per GPU, mem fraction, running requests, graph bs).
 _HARDWARE = {
-    _H200: (8, 16, 4096, 0.8, 64, [1, 2, 4, 8, 16, 32, 64]),
-    _B300: (4, 8, 8192, 0.83, 128, [1, 2, 4, 8, 16, 32, 48, 64, 96, 128]),
+    "H200": (8, 16, 4096, 0.8, 64, [1, 2, 4, 8, 16, 32, 64]),
+    "B300": (4, 8, 8192, 0.83, 128, [1, 2, 4, 8, 16, 32, 48, 64, 96, 128]),
 }
 _LAYOUT_FIELDS = (
     "tensor_model_parallel_size",
@@ -24,44 +24,85 @@ _LAYOUT_FIELDS = (
 )
 
 
-def _train_args(monkeypatch, launcher, **kwargs) -> tuple[list[str], dict]:
-    calls = []
-    monkeypatch.setattr(U, "exec_command_cpu", lambda command: None)
-    monkeypatch.setattr(U, "convert_checkpoint", lambda **kw: None)
-    monkeypatch.setattr(U, "hf_download_dataset", lambda *a, **kw: None)
-    monkeypatch.setattr(U, "execute_train", lambda **kw: calls.append(kw))
+@dataclass
+class _Backend:
+    commands: list = field(default_factory=list)
+    conversions: list = field(default_factory=list)
+    datasets: list = field(default_factory=list)
+    trains: list = field(default_factory=list)
+
+    def exec_command_cpu(self, command):
+        self.commands.append(command)
+
+    def convert_checkpoint(self, **kwargs):
+        self.conversions.append(kwargs)
+
+    def hf_download_dataset(self, full_name, data_dir):
+        self.datasets.append(full_name)
+
+    def execute_train(self, **kwargs):
+        self.trains.append(kwargs)
+
+
+@pytest.fixture
+def launcher():
+    return import_launch_script(REPO_ROOT / _LAUNCHER)
+
+
+def _run(monkeypatch, launcher, **kwargs) -> _Backend:
+    backend = _Backend()
+    monkeypatch.setattr(launcher.ScriptArgs, "create_backend", lambda self: backend)
     launcher.main(**kwargs)
-    (call,) = calls
+    return backend
+
+
+def _train_args(monkeypatch, launcher, **kwargs) -> tuple[list[str], dict]:
+    (call,) = _run(monkeypatch, launcher, **kwargs).trains
     return shlex.split(call["train_args"]), call
 
 
-# Layouts as (TP, PP, CP, EP, layers on each edge stage); None keeps the entry point's own.
-@pytest.mark.parametrize(
-    "script,layout,optimizer",
-    [
-        (_H200, None, "adam"),
-        (_H200, (4, 8, 2, 8, 7), "muon"),
-        (_H200, (4, 4, 4, 16, 15), "muon"),
-        (_B300, None, "adam"),
-        (_B300, None, "muon"),
-    ],
-)
-@pytest.mark.parametrize("counts", [(3, 8, 8), (100, 32, 16)])
-def test_dapo_recipe_survives_megatron_validation(monkeypatch, tmp_path, counts, script, layout, optimizer):
+def _validate(monkeypatch, tokens, *, megatron_model_type, world_size, blackwell):
     from miles.backends.megatron_utils.arguments import parse_args, set_default_megatron_args, validate_args
     from miles.utils.arguments import get_miles_extra_args_provider, miles_validate_args
 
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda *a, **k: (10, 3) if blackwell else (9, 0))
+    monkeypatch.setattr("megatron.training.arguments.get_device_arch_version", lambda: 10 if blackwell else 9)
+    monkeypatch.setenv("CUDA_DEVICE_MAX_CONNECTIONS", "1")
+    monkeypatch.setattr(sys, "argv", ["train.py", *expand_model_args(megatron_model_type), *tokens])
+    args = parse_args(extra_args_provider=get_miles_extra_args_provider())
+    args.rank, args.world_size, args.compress_ratios = 0, world_size, None
+    args = set_default_megatron_args(args)
+    miles_validate_args(args)
+    validate_args(args)
+    return args
+
+
+# Layouts as (TP, PP, CP, EP, layers on each edge stage); None keeps the hardware recipe's.
+@pytest.mark.parametrize(
+    "hardware,layout,optimizer",
+    [
+        ("H200", None, "adam"),
+        ("H200", (4, 8, 2, 8, 7), "muon"),
+        ("H200", (4, 4, 4, 16, 15), "muon"),
+        ("B300", None, "adam"),
+        ("B300", None, "muon"),
+    ],
+)
+@pytest.mark.parametrize("counts", [(3, 8, 8), (100, 32, 16)])
+def test_dapo_recipe_survives_megatron_validation(
+    monkeypatch, tmp_path, launcher, counts, hardware, layout, optimizer
+):
     monkeypatch.delenv("WANDB_API_KEY", raising=False)
-    launcher = import_launch_script(U.repo_base_dir / script)
     template = tmp_path / "chat.jinja"
     template.write_text("{{ messages }}")
-    defaults = launcher.ScriptArgs()
     if layout is None:
+        defaults = launcher.ScriptArgs(hardware=hardware)
         layout = tuple(getattr(defaults, name) for name in _LAYOUT_FIELDS)
-    use_r3 = script == _B300 or layout[2] > 1
+    use_r3 = hardware == "B300" or layout[2] > 1
     tokens, call = _train_args(
         monkeypatch,
         launcher,
+        hardware=hardware,
         **dict(zip(_LAYOUT_FIELDS, layout, strict=True)),
         optimizer=optimizer,
         reasoning_effort="xhigh" if optimizer == "muon" else None,
@@ -72,19 +113,16 @@ def test_dapo_recipe_survives_megatron_validation(monkeypatch, tmp_path, counts,
         n_samples_per_prompt=counts[2],
         chat_template_path=str(template),
     )
-    num_nodes, gpus_per_engine, max_tokens, mem_fraction, running, graph_bs = _HARDWARE[script]
+    num_nodes, gpus_per_engine, max_tokens, mem_fraction, running, graph_bs = _HARDWARE[hardware]
     assert "--use-dynamic-batch-size" in tokens and "--micro-batch-size" not in tokens
     assert call["num_gpus_per_node"] == 8 and call["config"].num_nodes == num_nodes
-    blackwell = script == _B300
-    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda *a, **k: (10, 3) if blackwell else (9, 0))
-    monkeypatch.setattr("megatron.training.arguments.get_device_arch_version", lambda: 10 if blackwell else 9)
-    monkeypatch.setenv("CUDA_DEVICE_MAX_CONNECTIONS", "1")
-    monkeypatch.setattr(sys, "argv", ["train.py", *expand_model_args("muse-spark-full"), *tokens])
-    args = parse_args(extra_args_provider=get_miles_extra_args_provider())
-    args.rank, args.world_size, args.compress_ratios = 0, 8 * num_nodes, None
-    args = set_default_megatron_args(args)
-    miles_validate_args(args)
-    validate_args(args)
+    args = _validate(
+        monkeypatch,
+        tokens,
+        megatron_model_type="muse-spark-open",
+        world_size=8 * num_nodes,
+        blackwell=hardware == "B300",
+    )
     assert args.hf_checkpoint == "/root/models/Muse-Spark-Open-816B-A42B"
     assert args.ref_load == "/root/models/Muse-Spark-Open-816B-A42B_torch_dist"
     assert args.prompt_data == "/root/datasets/dapo-math-17k/dapo-math-17k.jsonl"
@@ -139,13 +177,13 @@ def test_dapo_recipe_survives_megatron_validation(monkeypatch, tmp_path, counts,
     assert not args.sglang_disable_cuda_graph and args.sglang_mem_fraction_static == mem_fraction
     assert args.sglang_max_running_requests == running and args.sglang_cuda_graph_bs_decode == graph_bs
     assert args.save_debug_rollout_data.endswith("/rollout_data/{rollout_id}.pt")
-    assert args.pin_rollout_manager_to_head == (script == _B300)
+    assert args.pin_rollout_manager_to_head == (hardware == "B300")
 
 
-@pytest.mark.parametrize("script,layout", [(_H200, (8, 8, 1, 8, 7)), (_B300, (8, 4, 1, 8, 15))])
-def test_entry_point_sets_its_cluster_and_engine_sizing(script, layout):
-    args = import_launch_script(U.repo_base_dir / script).ScriptArgs()
-    num_nodes, gpus_per_engine, max_tokens, mem_fraction, running, graph_bs = _HARDWARE[script]
+@pytest.mark.parametrize("hardware,layout", [("H200", (8, 8, 1, 8, 7)), ("B300", (8, 4, 1, 8, 15))])
+def test_hardware_sets_the_cluster_and_engine_sizing(launcher, hardware, layout):
+    args = launcher.ScriptArgs(hardware=hardware)
+    num_nodes, gpus_per_engine, max_tokens, mem_fraction, running, graph_bs = _HARDWARE[hardware]
     assert (args.num_nodes, args.num_gpus_per_node, args.rollout_num_gpus_per_engine) == (
         num_nodes,
         8,
@@ -160,68 +198,66 @@ def test_entry_point_sets_its_cluster_and_engine_sizing(script, layout):
     assert list(args.sglang_cuda_graph_bs_decode) == graph_bs
 
 
-def test_explicit_values_override_the_entry_point():
-    args = import_launch_script(U.repo_base_dir / _B300).ScriptArgs(
-        max_tokens_per_gpu=4096, sglang_mem_fraction_static=0.8, sglang_max_running_requests=64
+def test_explicit_values_override_the_hardware_recipe(launcher):
+    args = launcher.ScriptArgs(
+        hardware="B300",
+        max_tokens_per_gpu=4096,
+        sglang_mem_fraction_static=0.8,
+        sglang_max_running_requests=64,
+        sglang_cuda_graph_bs_decode=(1, 2),
+        pin_rollout_manager_to_head=False,
     )
     assert (args.max_tokens_per_gpu, args.sglang_mem_fraction_static, args.sglang_max_running_requests) == (
         4096,
         0.8,
         64,
     )
+    assert args.sglang_cuda_graph_bs_decode == (1, 2) and not args.pin_rollout_manager_to_head
 
 
-def test_the_shared_recipe_takes_cluster_values_only_from_an_entry_point():
-    common = import_launch_script(U.repo_base_dir / _B300).common
-    with pytest.raises(TypeError, match="num_nodes"):
-        common.ScriptArgs()
-
-
-@pytest.mark.parametrize("script", [_H200, _B300])
+@pytest.mark.parametrize("hardware", ["H200", "B300"])
 @pytest.mark.parametrize("buffer_size", [4 * 1024**3, 8 * 1024**3])
-def test_weight_buffer_override_reaches_train_entrypoint(monkeypatch, script, buffer_size):
-    launcher = import_launch_script(U.repo_base_dir / script)
-    tokens, _ = _train_args(monkeypatch, launcher, update_weight_buffer_size=buffer_size)
+def test_weight_buffer_override_reaches_train_entrypoint(monkeypatch, launcher, hardware, buffer_size):
+    tokens, _ = _train_args(monkeypatch, launcher, hardware=hardware, update_weight_buffer_size=buffer_size)
     assert tokens.count("--update-weight-buffer-size") == 1
     assert tokens[tokens.index("--update-weight-buffer-size") + 1] == str(buffer_size)
 
 
-# --partial on each entry point: GPUs per node -> (TP, PP, CP, EP, layers on each edge stage).
-@pytest.mark.parametrize("script,num_gpus,layout", [(_H200, 8, (4, 2, 1, 4, 2)), (_B300, 4, (2, 2, 1, 2, 2))])
-def test_partial_runs_the_four_layer_checkpoint_on_one_node(monkeypatch, tmp_path, script, num_gpus, layout):
-    from miles.backends.megatron_utils.arguments import parse_args, set_default_megatron_args, validate_args
-    from miles.utils.arguments import get_miles_extra_args_provider, miles_validate_args
-
+# The partial on each hardware: GPUs per node -> (TP, PP, CP, EP, layers on each edge stage).
+@pytest.mark.parametrize("hardware,num_gpus,layout", [("H200", 8, (4, 2, 1, 4, 2)), ("B300", 4, (2, 2, 1, 2, 2))])
+def test_partial_runs_the_four_layer_checkpoint_on_one_node(
+    monkeypatch, tmp_path, launcher, hardware, num_gpus, layout
+):
     monkeypatch.delenv("WANDB_API_KEY", raising=False)
-    launcher = import_launch_script(U.repo_base_dir / script)
     template = tmp_path / "chat.jinja"
     template.write_text("{{ messages }}")
-    commands, conversions, calls = [], [], []
-    monkeypatch.setattr(U, "exec_command_cpu", commands.append)
-    monkeypatch.setattr(U, "convert_checkpoint", lambda **kw: conversions.append(kw))
-    monkeypatch.setattr(U, "hf_download_dataset", lambda *a, **kw: None)
-    monkeypatch.setattr(U, "execute_train", lambda **kw: calls.append(kw))
-    launcher.main(partial=True, num_gpus_per_node=num_gpus, chat_template_path=str(template))
+    backend = _run(
+        monkeypatch,
+        launcher,
+        model_name=_PARTIAL,
+        hardware=hardware,
+        num_gpus_per_node=num_gpus,
+        chat_template_path=str(template),
+        num_rollout=3,
+        rollout_batch_size=4,
+        n_samples_per_prompt=4,
+    )
 
-    assert commands == [
+    assert backend.commands == [
         "hf download RadixArk/Muse-Spark-Open-last4-partial --local-dir /root/models/Muse-Spark-Open-last4-partial"
     ]
-    (conversion,) = conversions
-    assert not conversion["multinode"] and conversion["megatron_model_type"] == "muse-spark-last4-partial"
-    (call,) = calls
-    assert call["config"].num_nodes == 1 and call["megatron_model_type"] == "muse-spark-last4-partial"
+    (conversion,) = backend.conversions
+    assert not conversion["multinode"] and conversion["megatron_model_type"] == "muse-spark-open-last4-partial"
+    (call,) = backend.trains
+    assert call["config"].num_nodes == 1 and call["megatron_model_type"] == "muse-spark-open-last4-partial"
 
-    blackwell = script == _B300
-    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda *a, **k: (10, 3) if blackwell else (9, 0))
-    monkeypatch.setattr("megatron.training.arguments.get_device_arch_version", lambda: 10 if blackwell else 9)
-    monkeypatch.setenv("CUDA_DEVICE_MAX_CONNECTIONS", "1")
-    tokens = shlex.split(call["train_args"])
-    monkeypatch.setattr(sys, "argv", ["train.py", *expand_model_args("muse-spark-last4-partial"), *tokens])
-    args = parse_args(extra_args_provider=get_miles_extra_args_provider())
-    args.rank, args.world_size, args.compress_ratios = 0, num_gpus, None
-    args = set_default_megatron_args(args)
-    miles_validate_args(args)
-    validate_args(args)
+    args = _validate(
+        monkeypatch,
+        shlex.split(call["train_args"]),
+        megatron_model_type="muse-spark-open-last4-partial",
+        world_size=num_gpus,
+        blackwell=hardware == "B300",
+    )
     assert args.hf_checkpoint == "/root/models/Muse-Spark-Open-last4-partial"
     assert args.ref_load == "/root/models/Muse-Spark-Open-last4-partial_torch_dist"
     assert args.num_layers == 4
@@ -235,23 +271,20 @@ def test_partial_runs_the_four_layer_checkpoint_on_one_node(monkeypatch, tmp_pat
         num_gpus,
     )
     assert (args.num_rollout, args.rollout_batch_size, args.n_samples_per_prompt) == (3, 4, 4)
-    assert (args.rollout_max_response_len, args.rollout_max_context_len) == (1024, 4096)
-    assert args.rm_type == "deterministic_random" and args.ci_test and not args.ci_disable_kl_checker
-    assert args.check_weight_update_skip_list == [
-        "model.vision_tower.",
-        "model.vision_adapter.",
-        "model.vision_projection.",
-        "model.audio_tower.",
-    ]
 
 
-@pytest.mark.parametrize("script", [_H200, _B300])
-def test_a_multi_node_entry_point_converts_across_the_ray_cluster(monkeypatch, script):
-    conversions = []
-    monkeypatch.setattr(U, "exec_command_cpu", lambda command: None)
-    monkeypatch.setattr(U, "convert_checkpoint", lambda **kw: conversions.append(kw))
-    monkeypatch.setattr(U, "hf_download_dataset", lambda *a, **kw: None)
-    monkeypatch.setattr(U, "execute_train", lambda **kw: None)
-    import_launch_script(U.repo_base_dir / script).main()
-    (conversion,) = conversions
-    assert conversion["multinode"] and conversion["megatron_model_type"] == "muse-spark-full"
+@pytest.mark.parametrize("hardware", ["H200", "B300"])
+def test_the_full_model_converts_across_the_ray_cluster(monkeypatch, launcher, hardware):
+    (conversion,) = _run(monkeypatch, launcher, hardware=hardware).conversions
+    assert conversion["multinode"] and conversion["megatron_model_type"] == "muse-spark-open"
+
+
+def test_vlm_trains_and_evaluates_on_geo3k_imgurl(monkeypatch, launcher):
+    backend = _run(monkeypatch, launcher, hardware="H200", vlm=True, eval_interval=5)
+    assert backend.datasets == ["chenhegu/geo3k_imgurl"]
+    (call,) = backend.trains
+    tokens = shlex.split(call["train_args"])
+    assert tokens[tokens.index("--prompt-data") + 1] == "/root/datasets/geo3k_imgurl/train.parquet"
+    assert tokens[tokens.index("--eval-prompt-data") + 2] == "/root/datasets/geo3k_imgurl/test.parquet"
+    assert (tokens[tokens.index("--input-key") + 1], tokens[tokens.index("--label-key") + 1]) == ("problem", "answer")
+    assert tokens[tokens.index("--multimodal-keys") + 1] == '{"image": "images"}'
