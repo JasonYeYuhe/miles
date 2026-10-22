@@ -12,6 +12,7 @@ from miles.utils.test_utils.fault_injector.actions.base import (
     PARKABLE_TRAIN_SCRIPT,
     FaultHookContext,
     FaultHookResources,
+    _assert_synchronous_orchestrator,
 )
 from miles.utils.test_utils.fault_injector.actions.cell import RestartRolloutCellAction
 from miles.utils.test_utils.fault_injector.actions.frozen import (
@@ -165,6 +166,15 @@ class TestParkableLoops:
     def test_the_parkable_script_is_the_default_launch_script(self) -> None:
         """The freeze guard and launch harness must agree on the synchronous script."""
         assert PARKABLE_TRAIN_SCRIPT == DEFAULT_TRAIN_SCRIPT
+
+    @pytest.mark.parametrize("script", ["/miles/train.py", "/venv/bin/miles-train"])
+    async def test_the_synchronous_driver_passes_however_it_was_launched(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, script: str
+    ) -> None:
+        """The checkout script and the installed command run the same synchronous loop."""
+        monkeypatch.setattr(sys, "argv", [script])
+        args = SimpleNamespace(ci_fault_hooks_path=str(tmp_path / "plan.json"), update_weights_interval=1)
+        _assert_synchronous_orchestrator(args, trainer_model_id=None, action="sleep_forever")
 
     async def test_an_unarmed_async_loop_is_not_subject_to_freeze_guards(
         self, configure_hooks: Callable[..., _FaultHookController], monkeypatch: pytest.MonkeyPatch

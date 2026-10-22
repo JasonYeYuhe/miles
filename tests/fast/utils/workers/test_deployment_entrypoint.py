@@ -122,9 +122,10 @@ class TestServingTheFaultToleranceOfItsOwnCells:
         assert fake.calls == []
 
 
+# where each driver's code lives; train.py and train_async.py at the root only call these mains
 _DRIVER_SCRIPTS = [
-    "train.py",
-    "train_async.py",
+    "miles/entrypoints/train.py",
+    "miles/entrypoints/train_async.py",
     "train_multi_policy.py",
 ]
 
@@ -138,11 +139,12 @@ class TestEveryDriverRunsItsOwnOrchestrationScript:
 
 
 def _functions_called_in_main(script: str) -> set[str]:
+    """Calls in the script's ``if __name__ == "__main__"`` block, or in the ``main()`` that block runs."""
     tree = ast.parse((REPO_ROOT / script).read_text())
     return {
         ast.unparse(node.func)
         for statement in tree.body
-        if isinstance(statement, ast.If)
+        if isinstance(statement, ast.If) or (isinstance(statement, ast.FunctionDef) and statement.name == "main")
         for node in ast.walk(statement)
         if isinstance(node, ast.Call)
     }

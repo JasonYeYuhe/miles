@@ -39,10 +39,12 @@ class BaseFaultAction(FrozenStrictBaseModel, abc.ABC):
 
 
 PARKABLE_TRAIN_SCRIPT: str = "train.py"
+# The same driver installed as a command (setup.py's console_scripts).
+PARKABLE_TRAIN_COMMAND: str = "miles-train"
 
 
 def _assert_synchronous_orchestrator(args: object, trainer_model_id: str | None, action: str) -> None:
-    assert (script := Path(sys.argv[0]).name) == PARKABLE_TRAIN_SCRIPT, (
+    assert (script := Path(sys.argv[0]).name) in (PARKABLE_TRAIN_SCRIPT, PARKABLE_TRAIN_COMMAND), (
         f"{action} runs between synchronous steps, and only {PARKABLE_TRAIN_SCRIPT} stands still there; "
         f"{script} has already started the next rollout by the time it reaches here"
     )
