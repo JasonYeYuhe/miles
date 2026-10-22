@@ -68,13 +68,17 @@ async def _open_view(page: Page, hash_route: str) -> dict:
     return await page.evaluate(_COLLECT, view_start)
 
 
-def _sample_with_conversation(dump_details: Path, rollout_id: int) -> int | None:
-    """Read off disk: asking the server would warm the very caches being timed."""
+def _sample_hash_with_conversation(dump_details: Path, rollout_id: int) -> str | None:
+    """Route of a sample that has a conversation, read off disk: asking the
+    server would warm the very caches being timed. The leaf is part of the
+    route, as views_rollout.js sampleHash builds it."""
     path = dump_details / "trajectory" / f"{rollout_id}.jsonl"
     if not path.exists():  # single-turn runs record no conversations
         return None
     with open(path) as f:
-        return json.loads(f.readline())["sample_index"]
+        row = json.loads(f.readline())
+    occurrence = f"?occurrence={row['sample_occurrence']}" if row["sample_occurrence"] else ""
+    return f"#/rollout/{rollout_id}/sample/{row['sample_index']}{occurrence}"
 
 
 async def time_views(url: str, dump_details: Path) -> dict:
@@ -90,15 +94,15 @@ async def time_views(url: str, dump_details: Path) -> dict:
         results["rollouts"] = await _open_view(page, "#/rollout/latest")
         await page.wait_for_url(lambda url: url.rsplit("/", 1)[-1].split("?")[0].isdigit())
         rollout_id = int(page.url.rsplit("/", 1)[-1].split("?")[0])
-        sample_index = _sample_with_conversation(dump_details, rollout_id)
-        if sample_index is None:
+        conversation_hash = _sample_hash_with_conversation(dump_details, rollout_id)
+        if conversation_hash is None:
             # no conversation: the sample view opens straight on its tokens
             first_index = await page.evaluate(
                 f"fetch('/api/rollout/{rollout_id}/summary').then(r => r.json()).then(s => s.rows[0].sample_index)"
             )
             results["sample tokens"] = await _open_view(page, f"#/rollout/{rollout_id}/sample/{first_index}")
         else:
-            results["sample conversation"] = await _open_view(page, f"#/rollout/{rollout_id}/sample/{sample_index}")
+            results["sample conversation"] = await _open_view(page, conversation_hash)
             view_start = await page.evaluate("performance.now()")
             await page.get_by_role("button", name="Tokens").click()
             await page.evaluate(_SETTLE, [_SETTLE_MS, _TIMEOUT_MS])
