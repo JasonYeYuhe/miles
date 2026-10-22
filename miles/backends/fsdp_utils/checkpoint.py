@@ -129,7 +129,7 @@ def load(actor: Any) -> dict[str, Any] | None:
     load_optimizer = not actor.args.backend.no_load_optim and hasattr(
         actor, "optimizer"
     )  # config-access-exempt: optimizer is absent when the actor has no training state
-    if load_optimizer and optimizer_dir.exists():
+    if load_optimizer and (optimizer_dir / ".metadata").is_file():
         optimizer_state = OptimizerState(actor.model, actor.optimizer)
         optim_state_dict = {"optim_state": optimizer_state}
         try:
@@ -142,7 +142,7 @@ def load(actor: Any) -> dict[str, Any] | None:
 
     # Load LR scheduler state (optional)
     load_lr_scheduler = (
-        hasattr(actor, "lr_scheduler") and lr_scheduler_dir.exists()
+        hasattr(actor, "lr_scheduler") and (lr_scheduler_dir / ".metadata").is_file()
     )  # config-access-exempt: lr_scheduler is absent when the actor has no training state
     if load_lr_scheduler:
         lr_scheduler_state = LRSchedulerState(actor.lr_scheduler)
