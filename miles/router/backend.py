@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from miles.backends.sglang_utils.router_args_utils import (
     compute_sglang_router_args,
-    effective_router_policy,
+    resolve_router_policies,
     router_args_to_argv,
 )
 from miles.router.config import compute_miles_router_config
@@ -75,6 +75,12 @@ class RouterBackend(ABC):
 class SGLangRouterBackend(RouterBackend):
     kind = RouterKind.SGLANG
     features = RouterFeatures(pd_disaggregation=True, routing_key_header="X-SMG-Routing-Key")
+    # sgl-router answers 400 missing_routing_key under these without the header
+    _KEY_POLICIES = frozenset({"consistent_hashing", "manual"})
+
+    def __init__(self, args: Namespace) -> None:
+        super().__init__(args)
+        self._policies = resolve_router_policies(args)
 
     def _launch_argv(
         self, ctx: LaunchCommandContext, *, model_cfg: "ModelConfig", interpreter_prefix: list[str]
@@ -91,13 +97,7 @@ class SGLangRouterBackend(RouterBackend):
         return [*interpreter_prefix, "-m", "sglang_router.launch_router", *router_args_to_argv(router_args)]
 
     def routes_by_key(self) -> bool:
-        # PD runs route their prefill and decode pools by their own policies
-        policies = {
-            effective_router_policy(self.args),
-            self.args.router_prefill_policy,
-            self.args.router_decode_policy,
-        }
-        return not policies.isdisjoint({"consistent_hashing", "manual"})
+        return not self._KEY_POLICIES.isdisjoint(self._policies.values())
 
 
 class MilesRouterBackend(RouterBackend):
