@@ -197,6 +197,7 @@ class MegatronArgsNamespace(EnhancedArgparseNamespace):
             "no_load_optim",
             "no_load_rng",
             "padded_vocab_size",
+            "pretrained_checkpoint",
             "rank",
             "skipped_train_samples",
             "train_iters",
