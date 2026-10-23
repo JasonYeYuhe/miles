@@ -350,7 +350,7 @@ class MilesSGLangTransport:
         if body.get("cache_salt") is not None:
             payload["extra_key"] = body["cache_salt"]
 
-        request_headers = make_router_backend(self.args).routing_headers(session_id) if session_id else None
+        request_headers = (make_router_backend(self.args).routing_headers(session_id) or None) if session_id else None
 
         from miles.utils.http_utils import post
 

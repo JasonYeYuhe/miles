@@ -25,13 +25,17 @@ def compute_sglang_router_args(
         request_timeout_secs=args.sglang_router_request_timeout_secs,
     )
 
-    if args.sglang_router_policy:
-        router_args["policy"] = args.sglang_router_policy
+    router_args["policy"] = effective_router_policy(args)
 
     if has_pd_disaggregation:
         router_args["pd_disaggregation"] = True
 
     return router_args
+
+
+def effective_router_policy(args: argparse.Namespace) -> str | None:
+    # --sglang-router-policy overrides the pass-through --router-policy
+    return args.sglang_router_policy or args.router_policy
 
 
 def router_args_to_argv(router_args: Mapping[str, object]) -> list[str]:

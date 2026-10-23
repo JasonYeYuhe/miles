@@ -1,4 +1,5 @@
 from tests.ci.ci_register import register_cpu_ci
+from tests.fast.fixtures.args_fixtures import sglang_router_args
 from tests.fast.fixtures.megatron_config_fixtures import encode_megatron_config
 
 register_cpu_ci(est_time=60, suite="stage-b-cpu", labels=["fully-async"])
@@ -117,7 +118,7 @@ def make_args(**overrides) -> Namespace:
         sglang_router_ip="127.0.0.1",
         sglang_router_port=30000,
         sglang_router_request_timeout_secs=14400,
-        router="sglang",
+        **sglang_router_args(),
         eval_num_gpus=0,
         namespaced_radix_cache=True,
     )

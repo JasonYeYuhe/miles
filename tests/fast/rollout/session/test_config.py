@@ -4,6 +4,7 @@ from argparse import Namespace
 
 import pytest
 from pydantic import ValidationError
+from tests.fast.fixtures.args_fixtures import sglang_router_args
 
 from miles.rollout.session.config import SessionServerConfig, compute_session_server_config
 
@@ -68,8 +69,7 @@ _DISTINCT_ARGS_VALUES = dict(
     rollout_top_logprobs_num=32,
     rollout_sampling_logprobs_mode="support",
     rollout_temperature=0.7,
-    router="sglang",
-    sglang_router_policy="manual",
+    **sglang_router_args("manual"),
 )
 
 
