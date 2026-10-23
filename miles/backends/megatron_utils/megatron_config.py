@@ -390,15 +390,6 @@ def compute_trainer_args(args: Namespace, trainer: MegatronTrainerConfig) -> Nam
         ans.load = compute_trainer_checkpoint_dir(base_dir=ans.load, trainer_id=trainer.trainer_id)
         ans.save_hf = compute_trainer_checkpoint_dir(base_dir=ans.save_hf, trainer_id=trainer.trainer_id)
 
-    if (
-        trainer.role == CRITIC_ROLE
-        and ans.ckpt_step is not None
-        and has_hf_checkpoint(ans.load)
-        and not has_megatron_checkpoint(ans.load, ckpt_step=ans.ckpt_step)
-    ):
-        # The actor's step selector does not apply to HF initialization of the critic.
-        ans.ckpt_step = None
-
     # TODO: a --use-critic critic keeps the actor's requested_load, so a hot restart reads the actor's checkpoint.
 
     ans.trainer_init_expected_num_cells = _resolve_trainer_init_expected_num_cells(ans, base=args, trainer=trainer)
@@ -451,7 +442,16 @@ def compute_trainer_checkpoint_dir(*, base_dir: str | None, trainer_id: str) -> 
     return str(Path(base_dir) / TRAINER_CHECKPOINT_DIRNAME / trainer_id)
 
 
-def resolve_args_checkpoint_load(args: Namespace) -> bool:
+def resolve_args_checkpoint_load(args: Namespace, *, role: str) -> bool:
+    if (
+        role == CRITIC_ROLE
+        and args.ckpt_step is not None
+        and has_hf_checkpoint(args.load)
+        and not has_megatron_checkpoint(args.load, ckpt_step=args.ckpt_step)
+    ):
+        # The actor's step selector does not apply to HF initialization of the critic.
+        args.ckpt_step = None
+
     # TODO: refactor
     args.requested_load = args.load
     resume_from_ckpt = has_megatron_checkpoint(args.load)
@@ -460,10 +460,10 @@ def resolve_args_checkpoint_load(args: Namespace) -> bool:
     if explicit_selection:
         if args.load is None:
             raise ValueError("an explicit checkpoint selection requires --load")
-        return
+        return resume_from_ckpt
 
-    if has_megatron_checkpoint(args.load):
-        return
+    if resume_from_ckpt:
+        return True
 
     # TODO: During loading, we need to set the start_rollout_id here.
     if args.megatron_to_hf_mode == "bridge":

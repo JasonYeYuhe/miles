@@ -1044,9 +1044,7 @@ def load_model_state(
         or args.backend.pretrained_checkpoint is not None
         or "local_checkpoint_manager" in (checkpointing_context or {})
     )
-    explicit_selection = getattr(args, "ckpt_step", None) is not None or getattr(
-        args, "exit_on_missing_checkpoint", False
-    )
+    explicit_selection = args.backend.ckpt_step is not None or args.backend.exit_on_missing_checkpoint
     if load_dir is None or explicit_selection or _has_loadable_ckpt(load_dir):
         with load_ctx:
             iteration, restored_trained_iteration = load_checkpoint(
@@ -1085,7 +1083,7 @@ def load_model_state(
     if not restored_trained_iteration:
         assert iteration == 0, f"Weight initialization returned a trained iteration: {iteration}"
         start_rollout_id = 0
-    elif resume_from_ckpt or adapter_iteration is not None:
+    elif resume_from_ckpt or explicit_selection or adapter_iteration is not None:
         start_rollout_id = iteration + 1
     else:
         start_rollout_id = 0

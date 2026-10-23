@@ -43,13 +43,15 @@ class TestCheckpointLoadInputs:
         assert not after_request.no_load_rng
         assert not after_request.finetune
 
-    def test_reference_fallback_does_not_mutate_the_orchestrator_inputs(self, tmp_path: Path) -> None:
+    @pytest.mark.parametrize("same_path", [False, True])
+    def test_reference_fallback_does_not_mutate_the_orchestrator_inputs(self, tmp_path: Path, same_path: bool) -> None:
         """Deriving a fresh load preserves the requested destination and explicit options."""
+        reference = str(tmp_path / "reference")
         args = parse_megatron_test_config(
             "--load",
-            str(tmp_path / "missing"),
+            reference if same_path else str(tmp_path / "missing"),
             "--ref-load",
-            "reference",
+            reference,
             "--ref-ckpt-step",
             "7",
         )
@@ -58,7 +60,7 @@ class TestCheckpointLoadInputs:
         [trainer] = args.raw_megatron.trainers
         request = compute_trainer_ckpt_load_config(args, trainer)
         assert args.model_dump() == original
-        assert request.load == "reference"
+        assert request.load == reference
         assert request.ckpt_step == 7
         assert not request.resume_from_ckpt
 
@@ -158,3 +160,67 @@ class TestBridgeReferenceInitialization:
         assert request.resume_from_ckpt is False
         assert args.load == str(destination)
         assert args.start_rollout_id is None
+
+
+class TestExplicitCheckpointSelection:
+    @pytest.mark.parametrize("tracked", [False, True])
+    @pytest.mark.parametrize("finetune", [False, True])
+    def test_step_selection_retains_source_flags_and_tracker_provenance(
+        self, tmp_path: Path, tracked: bool, finetune: bool
+    ) -> None:
+        """An explicit step stays distinct from tracker-driven resume and reference initialization."""
+        load = tmp_path / "checkpoint"
+        (load / "iter_0000007").mkdir(parents=True)
+        if tracked:
+            (load / "latest_checkpointed_iteration.txt").write_text("9")
+        args = parse_megatron_test_config(
+            "--load",
+            str(load),
+            "--ckpt-step",
+            "7",
+            "--ref-load",
+            str(tmp_path / "reference"),
+            *(["--finetune"] if finetune else []),
+        )
+        original = args.model_dump()
+        [trainer] = args.raw_megatron.trainers
+
+        request = compute_trainer_ckpt_load_config(args, trainer)
+
+        assert request.load == str(load)
+        assert request.ckpt_step == 7
+        assert request.resume_from_ckpt is tracked
+        assert bool(request.finetune) is finetune
+        assert args.model_dump() == original
+
+    @pytest.mark.parametrize("critic_has_step", [False, True])
+    def test_critic_hf_initialization_does_not_inherit_an_actor_only_step(
+        self, tmp_path: Path, critic_has_step: bool
+    ) -> None:
+        """The critic drops an actor-only selector unless its own checkpoint contains that step."""
+        actor = tmp_path / "actor"
+        (actor / "iter_0000007").mkdir(parents=True)
+        critic = tmp_path / "critic"
+        critic.mkdir()
+        (critic / "config.json").write_text("{}")
+        if critic_has_step:
+            (critic / "iter_0000007").mkdir()
+        args = parse_megatron_test_config(
+            "--advantage-estimator",
+            "ppo",
+            "--load",
+            str(actor),
+            "--critic-load",
+            str(critic),
+            "--ckpt-step",
+            "7",
+        )
+        actor_config, critic_config = args.raw_megatron.trainers
+
+        actor_request = compute_trainer_ckpt_load_config(args, actor_config)
+        critic_request = compute_trainer_ckpt_load_config(args, critic_config)
+
+        assert actor_request.ckpt_step == 7
+        assert critic_request.load == str(critic)
+        assert critic_request.ckpt_step == (7 if critic_has_step else None)
+        assert critic_request.resume_from_ckpt is False

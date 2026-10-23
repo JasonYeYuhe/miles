@@ -51,7 +51,7 @@ def compute_trainer_ckpt_load_config(
     if trainer.model_id is not None:
         args.load = compute_trainer_checkpoint_dir(base_dir=args.load, trainer_id=trainer.trainer_id)
 
-    resume_from_ckpt = resolve_args_checkpoint_load(args)
+    resume_from_ckpt = resolve_args_checkpoint_load(args, role=trainer.role)
     return MegatronCkptLoadConfig(
         load=args.load,
         resume_from_ckpt=resume_from_ckpt,

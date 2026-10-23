@@ -14,7 +14,7 @@ __all__ = ["actor_module"]
 
 class TestActorInitCheckpointScope:
     @pytest.mark.parametrize("role", ["actor", "critic"])
-    @pytest.mark.parametrize("mode", ["fresh", "resume", "peer"])
+    @pytest.mark.parametrize("mode", ["fresh", "resume", "peer", "explicit"])
     @pytest.mark.parametrize("failure", [None, "build", "load"])
     def test_initialization_applies_only_the_current_request_and_cleans_every_exit(
         self,
@@ -37,13 +37,16 @@ class TestActorInitCheckpointScope:
             failure=failure,
             peer=mode == "peer",
         )
+        if mode == "explicit":
+            (path / "latest_checkpointed_iteration.txt").unlink()
+            (path / "iter_0000007").mkdir()
         request = MegatronCkptLoadConfig(
             load=str(path),
-            resume_from_ckpt=mode != "fresh",
+            resume_from_ckpt=mode in {"resume", "peer"},
             finetune=mode == "fresh",
             no_load_optim=mode == "fresh",
             no_load_rng=mode == "fresh",
-            ckpt_step=0 if mode == "fresh" else None,
+            ckpt_step=7 if mode == "explicit" else (0 if mode == "fresh" else None),
         )
         expected = MegatronCkptLoadConfig.for_peer_recovery() if mode == "peer" else request
         expected_fields = {name: vars(expected)[name] for name in CHECKPOINT_LOAD_FIELDS}

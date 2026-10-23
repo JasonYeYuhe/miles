@@ -434,19 +434,22 @@ class TestAReloadThatFindsNothingItSaved:
     def test_an_explicit_starting_checkpoint_is_restored_without_a_tracker(
         self, actor_module, tmp_path, monkeypatch, finetune, no_load_optim, no_load_rng
     ):
+        """Explicit step reloads retain progress and reset only the requested optimizer and RNG state."""
         args = _args(tmp_path, ckpt_step=7, finetune=finetune, no_load_optim=no_load_optim, no_load_rng=no_load_rng)
-        (Path(args.load) / "iter_0000007").mkdir(parents=True)
-        original_args = vars(args).copy()
+        (Path(args.backend.load) / "iter_0000007").mkdir(parents=True)
+        original_args = vars(args.backend).copy()
         seen = _watch_load(actor_module, monkeypatch, args=args, iteration=0 if finetune else 7)
         actor = _actor(actor_module, role="actor", args=args)
         actor.optimizer = Mock()
         reset = Mock()
         monkeypatch.setattr(actor_module, "reset_optimizer_state", reset)
 
-        actor.load_state()
+        assert _reload(actor) == (0 if finetune else 8)
 
-        assert seen["args_during_load"] == original_args
-        assert vars(args) == original_args
+        assert seen["args_during_load"] == {k: v for k, v in original_args.items() if k != "requested_load"}
+        assert vars(args.backend) == {
+            k: v for k, v in original_args.items() if k not in (*CHECKPOINT_LOAD_FIELDS, "requested_load")
+        }
         assert actor._post_init_random_state.restores == int(finetune or no_load_rng)
         assert reset.call_count == int(finetune or no_load_optim)
 

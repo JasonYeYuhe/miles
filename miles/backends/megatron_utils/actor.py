@@ -13,6 +13,7 @@ from torch_memory_saver import torch_memory_saver
 from miles.backends.megatron_utils.checkpoint_request import MegatronCkptLoadConfig
 from miles.backends.megatron_utils.hf_export import save_hf_model
 from miles.backends.megatron_utils.lora.utils import is_lora_enabled, lora_rollout_enabled
+from miles.backends.megatron_utils.megatron_config import has_megatron_checkpoint
 from miles.backends.megatron_utils.megatron_to_hf import converter_model_name
 from miles.backends.megatron_utils.rematerialize_utils import build_main_cast_context
 from miles.backends.megatron_utils.update_weight.hf_weight_iterator import get_hf_weight_iterator
@@ -374,7 +375,10 @@ class MegatronTrainRayActor(TrainRayActor):
 
         self._finalize_pending_async_save()
 
-        if not resume_from_ckpt and not (ckpt_load_config.ckpt_step is not None and ckpt_load_config.load == requested_load):
+        if not resume_from_ckpt and not (
+            ckpt_load_config.ckpt_step is not None
+            and has_megatron_checkpoint(ckpt_load_config.load, ckpt_step=ckpt_load_config.ckpt_step)
+        ):
             assert self.args.megatron_to_hf_mode != "bridge", "bridge mode unsupported"
             assert ckpt_load_config.finetune
             assert ckpt_load_config.no_load_optim
@@ -391,13 +395,13 @@ class MegatronTrainRayActor(TrainRayActor):
         else:
             logger.info("No checkpoint to resume; loading initial weights from %r", ckpt_load_config.load)
             overrider_for_loading = {}
-            reset_optim = self.args.backend.finetune or self.args.backend.no_load_optim
+            reset_optim = ckpt_load_config.finetune or ckpt_load_config.no_load_optim
             if reset_optim:
                 assert not self.args.backend.fp16
                 assert not self.args.backend.use_precision_aware_optimizer
                 assert not self.args.backend.optimizer_cpu_offload
                 assert not self.args.backend.offload_optimizer_states
-            if self.args.backend.finetune or self.args.backend.no_load_rng:
+            if ckpt_load_config.finetune or ckpt_load_config.no_load_rng:
                 self._post_init_random_state.restore()
             if reset_optim and self.optimizer is not None:
                 reset_optimizer_state(

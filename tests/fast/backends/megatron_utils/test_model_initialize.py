@@ -332,17 +332,32 @@ class TestWhereALoadSaysTheRunStarts:
                 resume_from_ckpt=False,
             )
 
+    def test_explicit_reference_weights_still_start_at_zero(self, tmp_path: Path) -> None:
+        """Selecting reference weights by step does not turn finetuning into resumed training."""
+        output = _load_model_state_with(
+            tmp_path=tmp_path,
+            finetune=True,
+            iteration=0,
+            ckpt_step=7,
+            write_tracker=False,
+            resume_from_ckpt=False,
+        )
+
+        assert (output.loaded_rollout_id, output.start_rollout_id) == (0, 0)
+
     @pytest.mark.parametrize(
         "selector",
         [{"ckpt_step": 7}, {"exit_on_missing_checkpoint": True}],
         ids=["checkpoint-step", "exit-on-missing"],
     )
     def test_an_explicit_selection_enters_the_checkpoint_loader_without_a_tracker(self, tmp_path, selector):
+        """Explicit selectors reach the loader even when no latest-checkpoint tracker exists."""
         output = _load_model_state_with(
             tmp_path=tmp_path,
             finetune=False,
             iteration=7,
             write_tracker=False,
+            resume_from_ckpt=False,
             **selector,
         )
 
