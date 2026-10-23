@@ -18,7 +18,9 @@ class TestTypedEventLogConfiguration:
     def test_typed_event_directory_controls_real_event_log_creation(self, tmp_path: Path, enabled: bool) -> None:
         """Typed event-directory settings either leave logging disabled or persist events under the process name."""
         directory = tmp_path / "events"
-        config = _LoggingConfig(save_debug_event_data=str(directory) if enabled else None)
+        config = _LoggingConfig(
+            save_debug_event_data=str(directory) if enabled else None, ci_enable_metrics_capture=False
+        )
         source = SimpleProcessIdentity(component="main")
 
         configure_logger(config, source=source, report_env=False)
@@ -39,10 +41,18 @@ class TestTypedEventLogConfiguration:
         first = tmp_path / "first"
         second = tmp_path / "second"
         source = SimpleProcessIdentity(component="main")
-        configure_logger(_LoggingConfig(save_debug_event_data=str(first)), source=source, report_env=False)
+        configure_logger(
+            _LoggingConfig(save_debug_event_data=str(first), ci_enable_metrics_capture=False),
+            source=source,
+            report_env=False,
+        )
         installed = get_event_logger()
 
-        configure_logger(_LoggingConfig(save_debug_event_data=str(second)), source=source, report_env=False)
+        configure_logger(
+            _LoggingConfig(save_debug_event_data=str(second), ci_enable_metrics_capture=False),
+            source=source,
+            report_env=False,
+        )
         get_event_logger().log(MetricEvent, {"metrics": {"score": 7}}, print_log=False)
 
         assert get_event_logger() is installed

@@ -72,6 +72,7 @@ class TestTypedCustomLoss:
                     use_tis=True,
                     true_on_policy_mode=False,
                     entropy_coef=0.0,
+                    observe_training_entropy=False,
                     dump_details=None,
                 )
             )

@@ -1,12 +1,12 @@
 import json
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
-from miles_plugins.models.inkling import model as inkling_model
 
-
-def test_provider_preserves_varlen_default_when_backend_omits_the_field(tmp_path: Path) -> None:
+def test_provider_preserves_varlen_default_when_backend_omits_the_field(
+    tmp_path: Path, inkling_model: ModuleType
+) -> None:
     """An older backend without a varlen field preserves the upstream default."""
     (tmp_path / "config.json").write_text(json.dumps({"text_config": {"vocab_size": 8}}))
     backend = SimpleNamespace(

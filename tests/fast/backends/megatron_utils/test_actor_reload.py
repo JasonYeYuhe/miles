@@ -177,12 +177,13 @@ def test_auxiliary_load_uses_its_own_checkpoint_step(
 ):
     args = _args(tmp_path, ckpt_step=39, opd_teacher_ckpt_step=7)
     original_args = vars(args).copy()
+    original_backend = vars(args.backend).copy()
     worker = _actor(actor_module, role="actor", args=args)
     worker.weights_backuper = Mock()
     observed_args = {}
 
     def load_checkpoint(*_args, **_kwargs):
-        observed_args.update(vars(args))
+        observed_args.update(vars(args.backend))
         return 0, False
 
     monkeypatch.setattr(actor_module, "load_checkpoint", load_checkpoint)
@@ -195,6 +196,7 @@ def test_auxiliary_load_uses_its_own_checkpoint_step(
     assert observed_args["finetune"] is True
     assert observed_args["ckpt_step"] == expected_step
     assert vars(args) == original_args
+    assert vars(args.backend) == original_backend
     worker.weights_backuper.backup.assert_called_once_with(model_tag)
     assert worker._active_model_tag == model_tag
 
@@ -229,6 +231,18 @@ def test_peer_recovery_does_not_inherit_startup_checkpoint_selection(actor_modul
         vocab_size=32,
         rollout_data_postprocess_path=None,
     )
+    request = MegatronCkptLoadConfig(
+        resume_from_ckpt=True,
+        **{name: vars(args.backend)[name] for name in CHECKPOINT_LOAD_FIELDS},
+    )
+    args.backend = type(args.backend)(
+        **{
+            name: value
+            for name, value in vars(args.backend).items()
+            if name not in (*CHECKPOINT_LOAD_FIELDS, "requested_load")
+        }
+    )
+    original_backend = vars(args.backend).copy()
     actor = _actor(actor_module, role="actor", args=args)
     actor._rank = 0
     original_args = vars(args).copy()
@@ -261,6 +275,7 @@ def test_peer_recovery_does_not_inherit_startup_checkpoint_selection(actor_modul
     next_rollout = actor.init(
         args,
         "actor",
+        ckpt_load_config=None if recovering else request,
         recv_ckpt_src_rank=0 if recovering else None,
         indep_dp_info=SimpleNamespace(cell_index=1),
         indep_dp_store_addr=None,
@@ -269,11 +284,12 @@ def test_peer_recovery_does_not_inherit_startup_checkpoint_selection(actor_modul
     during = seen["args_during_load"]
     assert next_rollout == (12 if recovering else 8)
     assert seen["checkpointing_context"] == ({"local_checkpoint_manager": manager} if recovering else None)
-    assert during["load"] == (None if recovering else original_args["load"])
+    assert during["load"] == (None if recovering else request.load)
     assert during["ckpt_step"] == (None if recovering else 7)
     assert during["pretrained_checkpoint"] == (None if recovering else "/pretrained")
     assert (during["finetune"], during["no_load_optim"], during["no_load_rng"]) == (False, False, False)
     assert vars(args) == original_args
+    assert vars(args.backend) == original_backend
 
 
 class _Scheduler:

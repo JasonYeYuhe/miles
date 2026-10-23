@@ -31,6 +31,7 @@ class TestEvalDatasetHook:
 
         args = _make_generate_args()
         vars(args).update(make_eval_args())
+        args.sglang.base_args["dp_size"] = 1
         args.inference_runtime_mut_state = InferenceRuntimeMutState(engine_count=1, gpu_count=1)
         [dataset] = args.eval_datasets
         dataset.custom_generate_function_path = CustomFunctionConfig(path="test-dataset-generator")

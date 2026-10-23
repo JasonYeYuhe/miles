@@ -903,7 +903,9 @@ class TestSynthesizedCriticTrainer:
             finetune=True,
         )
 
-        actor, critic = [compute_trainer_args(args, trainer) for trainer in resolve_megatron_config(args).trainers]
+        actor, critic = [
+            compute_trainer_args(args, trainer) for trainer in resolve_megatron_config(args, base_args={}).trainers
+        ]
 
         resolve_args_checkpoint_load(critic, role="critic")
 

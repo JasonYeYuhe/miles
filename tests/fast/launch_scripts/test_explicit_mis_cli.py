@@ -64,7 +64,8 @@ class TestExplicitMisCli:
 
         tokens = shlex.split(recording.commands[-1])
         assert "--custom-config-path" not in tokens
-        assert ("--use-tis" in tokens) is enabled
+        base_tis = script == "scripts/run_glm45_355b_a32b.py"
+        assert ("--use-tis" in tokens) is (enabled or base_tis)
         assert ("--use-rs" in tokens) is (enabled and use_rs)
         if enabled:
             for flag, value in {
@@ -79,7 +80,7 @@ class TestExplicitMisCli:
                 assert tokens[tokens.index(flag) + 1] == value
             assert "--tis-batch-normalize" in tokens
         else:
-            assert _MIS_FLAGS.isdisjoint(tokens)
+            assert _MIS_FLAGS.intersection(tokens) == ({"--use-tis"} if base_tis else set())
 
     @pytest.mark.parametrize(
         "script,hardware", [("scripts/run_deepseek_v4.py", "H200"), ("scripts/amd/run_deepseek_v4.py", "MI355X")]

@@ -80,7 +80,9 @@ def _args(**overrides):
     return SimpleNamespace(**values)
 
 
-def test_primary_wandb_init_uses_extended_init_timeout(monkeypatch):
+def test_primary_wandb_init_uses_extended_init_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Online primary initialization preserves shared mode and its extended timeout."""
+    monkeypatch.delenv("WANDB_MODE", raising=False)
     init_calls = []
 
     monkeypatch.setattr(wandb_utils.wandb, "init", lambda **kwargs: init_calls.append(kwargs))
@@ -111,7 +113,9 @@ def test_primary_wandb_init_resumes_a_preassigned_run(monkeypatch):
     assert init_calls[0]["resume"] == "allow"
 
 
-def test_secondary_wandb_init_attaches_without_resuming(monkeypatch):
+def test_secondary_wandb_init_attaches_without_resuming(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Online secondary initialization attaches to the shared run without resuming it."""
+    monkeypatch.delenv("WANDB_MODE", raising=False)
     init_calls = []
 
     monkeypatch.setattr(wandb_utils.wandb, "init", lambda **kwargs: init_calls.append(kwargs))

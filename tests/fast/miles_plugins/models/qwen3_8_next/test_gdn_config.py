@@ -5,8 +5,6 @@ from typing import Any
 import pytest
 import torch
 
-from miles_plugins.models.qwen3_8_next import gdn
-
 
 class _CpuSdkModule(torch.nn.Module):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -16,7 +14,7 @@ class _CpuSdkModule(torch.nn.Module):
 class TestGdnConfig:
     @pytest.mark.parametrize("backend", [None, "fla", "flashqla"])
     def test_constructor_connects_the_configured_sdk_kernel_without_cuda(
-        self, monkeypatch: pytest.MonkeyPatch, backend: str | None
+        self, monkeypatch: pytest.MonkeyPatch, backend: str | None, gdn: ModuleType
     ) -> None:
         """The real GDN constructor selects the requested external kernel or its default."""
         calls: list[str] = []
@@ -61,7 +59,7 @@ class TestGdnConfig:
         assert layer.in_proj_qkv.weight.shape == (6, 4)
         assert layer.out_proj.weight.device.type == "cpu"
 
-    def test_explicit_unsupported_backend_is_rejected_before_model_allocation(self) -> None:
+    def test_explicit_unsupported_backend_is_rejected_before_model_allocation(self, gdn: ModuleType) -> None:
         """An unsupported explicit backend cannot silently fall back to FLA."""
         with pytest.raises(ValueError, match="Unsupported GDN backend: unsupported"):
             gdn.ReplicatedGatedDeltaNet(

@@ -33,7 +33,7 @@ def test_each_takeover_changes_only_the_rollout_data_generation(
         config=ExecuteTrainConfig(run_id="unit-test"),
     ):
         callback = constructor.call_args.kwargs["relaunch"]
-        for generation in (1, 2):
+        for _generation in (1, 2):
             driver.records.append(object())
             callback(None)
 

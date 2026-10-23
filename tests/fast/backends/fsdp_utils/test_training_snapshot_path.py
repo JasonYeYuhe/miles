@@ -1,5 +1,6 @@
 from argparse import Namespace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from tests.fast.fixtures.config_snapshot_fixtures import _capture_configuration, _empty_rollout_data
@@ -28,7 +29,12 @@ class TestFsdpTrainingCapturePath:
         worker.role = "actor"
         worker._config_snapshot_train_recorded = False
         worker._heartbeat = SimpleHeartbeat()
-        worker.train_parallel_config = make_train_parallel_config()
+        parallel_config = make_train_parallel_config()
+        monkeypatch.setattr(
+            native_actor,
+            "get_parallel_state",
+            lambda: SimpleNamespace(train_parallel_config=lambda **kwargs: parallel_config),
+        )
         monkeypatch.setattr(native_actor, "get_rollout_data", _empty_rollout_data)
         monkeypatch.setattr(Timer(), "start_time", {})
         monkeypatch.setattr(Timer(), "timers", {})

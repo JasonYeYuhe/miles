@@ -121,6 +121,7 @@ def _parsed_standalone_args(*, trainers: list[SimpleNamespace], **overrides: Any
         "no_load_rng": None,
         "finetune": None,
         "ckpt_step": None,
+        "exit_on_missing_checkpoint": False,
         "debug_train_only": True,
         "debug_rollout_only": False,
         "offload_train": False,

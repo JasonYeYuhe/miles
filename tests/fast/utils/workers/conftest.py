@@ -25,7 +25,7 @@ class WorkerManagerArgs(ScalingConfig):
     env_report: str = ""
     env_report_interval_seconds: float | None = None
     ci_test: bool = False
-    ci_disable_config_snapshot: bool = False
+    ci_disable_config_snapshot: bool = True
 
 
 def worker_manager_args(**overrides) -> WorkerManagerArgs:

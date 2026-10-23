@@ -23,6 +23,7 @@ import threading
 import time
 from argparse import Namespace
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 from tests.manual.session import _rollout_benchmark_agent as agent
@@ -34,8 +35,8 @@ from tests.manual.session.bench_session_server_overhead import (
     benchmark_resources,
 )
 
-from miles.utils.args.component_rollout import InferenceRuntimeMutState
-from miles.utils.args.runtime import AllConfig
+if TYPE_CHECKING:
+    from miles.utils.args.runtime import AllConfig
 
 NUM_LAYERS = 48
 TOPK = 8
@@ -43,7 +44,8 @@ TOPK = 8
 
 def build_args(
     bench: Namespace, prompt_path: Path, backend_port: int, *, apply_chat_template: bool = True
-) -> AllConfig:
+) -> "AllConfig":
+    from miles.utils.args.component_rollout import InferenceRuntimeMutState
     from miles.utils.arguments import parse_args
 
     argv = [

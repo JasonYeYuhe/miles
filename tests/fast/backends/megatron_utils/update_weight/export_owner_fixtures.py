@@ -16,10 +16,20 @@ from miles.utils import distributed_utils
 def duplicate_param_model(monkeypatch: pytest.MonkeyPatch) -> torch.nn.Module:
     monkeypatch.setattr(parallel, "_parallel_state", None)
     state = make_parallel_state()
-    state.pp = GroupInfo(rank=1, size=2, group=object())
+    pp_group = object()
+
+    def get_rank(group: object | None = None) -> int:
+        assert group is None or group is pp_group
+        return 1
+
+    def get_world_size(group: object | None = None) -> int:
+        assert group is None or group is pp_group
+        return 2
+
+    monkeypatch.setattr(hf_weight_iterator_direct.dist, "get_rank", get_rank)
+    monkeypatch.setattr(hf_weight_iterator_direct.dist, "get_world_size", get_world_size)
+    state.pp = GroupInfo(rank=1, size=2, group=pp_group)
     monkeypatch.setattr(named_weights, "get_transformer_layer_offset", lambda config, vp_stage=0: 0)
-    monkeypatch.setattr(hf_weight_iterator_direct.dist, "get_rank", lambda: 1)
-    monkeypatch.setattr(hf_weight_iterator_direct.dist, "get_world_size", lambda: 2)
     monkeypatch.setattr(distributed_utils, "GLOO_GROUP", object())
 
     def gather(*, obj: object, object_list: list, group: object) -> None:

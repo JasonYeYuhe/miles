@@ -54,6 +54,30 @@ class TestGeneratedValueRegistration:
 
 class TestGeneratedPathNormalization:
     @pytest.mark.parametrize("registered", [False, True])
+    @pytest.mark.parametrize("run_id", ["first", "second"])
+    def test_tinker_checkpoint_root_normalizes_only_registered_path_segments(
+        self, make_record: Callable, registered: bool, run_id: str
+    ) -> None:
+        """Tinker run paths stabilize without hiding user roots, suffixes or custom fields."""
+        path = f"/checkpoints/{run_id}/adapter"
+        config = {
+            "tinker_checkpoint_root": path,
+            "backend": {"tinker_checkpoint_root": f"/checkpoints/{run_id}-other/adapter"},
+            "custom": {"tinker_checkpoint_root": path},
+        }
+        record = make_record(config=config).model_copy(
+            update={
+                "generated_values": (
+                    [ConfigSnapshotGeneratedValue(kind="run_id", name="0000", value=run_id)] if registered else []
+                )
+            }
+        )
+
+        expected = {**config, "tinker_checkpoint_root": "/checkpoints/$RUN_ID_0000/adapter" if registered else path}
+        assert normalize_record(record)["args"] == expected
+        assert record.config["args"] == config
+
+    @pytest.mark.parametrize("registered", [False, True])
     @pytest.mark.parametrize("explicit_critic_save", [False, True])
     def test_derived_critic_identity_survives_trainer_backend_migration(
         self,
@@ -164,8 +188,12 @@ class TestGeneratedPathNormalization:
         )
         assert normalize_record(record) == record.config
 
-    def test_eval_directories_stabilize_without_merging_modes_or_path_semantics(self, make_record: Callable) -> None:
-        """Generated eval roots stabilize while mode, parent and descendant paths remain observable."""
+    @pytest.mark.parametrize(
+        "field",
+        ["eval_hf_dir", "dumper_dir", "dumper_source_patcher_config_train", "dumper_source_patcher_config_inference"],
+    )
+    def test_registered_directories_preserve_modes_and_path_semantics(self, make_record: Callable, field: str) -> None:
+        """Registered roots stabilize while mode, parent and descendant paths remain observable."""
         results = {}
         for mode, parent, suffix, child in [
             ("fleet", "/dev/shm", "first", ""),
@@ -176,7 +204,7 @@ class TestGeneratedPathNormalization:
             ("fleet", "/dev/shm", "first", "/step_2"),
         ]:
             root = f"{parent}/miles_eval_{mode}_{suffix}"
-            record = make_record(config={"eval_hf_dir": root + child}).model_copy(
+            record = make_record(config={field: root + child}).model_copy(
                 update={
                     "generated_values": [
                         ConfigSnapshotGeneratedValue(
@@ -185,23 +213,27 @@ class TestGeneratedPathNormalization:
                     ]
                 }
             )
-            actual = normalize_record(record)["args"]["eval_hf_dir"]
+            actual = normalize_record(record)["args"][field]
             assert actual == f"{parent}/$TEMPORARY_DIRECTORY_fully_async_eval_{mode}{child}"
             results[(mode, parent, suffix, child)] = actual
         assert results[("fleet", "/dev/shm", "first", "")] == results[("fleet", "/dev/shm", "second", "")]
         assert len(set(results.values())) == 5
 
+    @pytest.mark.parametrize(
+        "field",
+        ["eval_hf_dir", "dumper_dir", "dumper_source_patcher_config_train", "dumper_source_patcher_config_inference"],
+    )
     @pytest.mark.parametrize("registered", [False, True])
-    def test_eval_paths_without_matching_provenance_remain_literal(
-        self, make_record: Callable, registered: bool
+    def test_registered_path_fields_without_matching_provenance_remain_literal(
+        self, make_record: Callable, registered: bool, field: str
     ) -> None:
-        """Similar prefixes and unrelated fields never borrow eval directory provenance."""
+        """Similar prefixes and unrelated fields never borrow directory provenance."""
         root = "/dev/shm/miles_eval_fleet_random"
         record = make_record(
             config={
-                "eval_hf_dir": root + ("-sibling" if registered else ""),
+                field: root + ("-sibling" if registered else ""),
                 "custom_path": root,
-                "custom_config": {"eval_hf_dir": root},
+                "custom_config": {field: root},
             }
         ).model_copy(
             update={
@@ -513,3 +545,90 @@ class TestOtherBackendGeneratedPaths:
         }
         assert normalized["custom"][backend] == fields
         assert record.config["args"][backend] == fields
+
+
+class TestStandaloneLocalRankNormalization:
+    @pytest.mark.parametrize("nested", [False, True])
+    def test_single_node_ranks_merge_without_changing_raw_or_custom_fields(
+        self, make_record: Callable, nested: bool
+    ) -> None:
+        """Standalone ranks merge only after validating their local device identity."""
+        records = []
+        for rank in [0, 7]:
+            fields = {"rank": rank, "local_rank": rank, "custom": {"local_rank": 9}}
+            record = make_record(rank=rank, config={"backend": fields} if nested else fields)
+            record = record.model_copy(
+                update={"context": record.context.model_copy(update={"deploy_component": "standalone"})}
+            )
+            records.append(record)
+
+        case = ConfigSnapshotConverter.convert(records)
+
+        process = next(iter(case.processes.values()))
+        assert process.ranks == [0, 7]
+        expected = {"rank": "$RANK", "local_rank": "$RANK", "custom": {"local_rank": 9}}
+        assert process.base == {"args": {"backend": expected} if nested else expected}
+        raw = [record.config["args"] for record in records]
+        assert [(fields["backend"] if nested else fields)["local_rank"] for fields in raw] == [0, 7]
+
+    @pytest.mark.parametrize("nested", [False, True])
+    @pytest.mark.parametrize("local_rank", [None, -1, True, 1.5, "1", 0, 2])
+    def test_invalid_or_mismatched_local_rank_is_rejected(
+        self, make_record: Callable, local_rank: object, nested: bool
+    ) -> None:
+        """Malformed or incorrect device placement cannot disappear during rank deduplication."""
+        fields = {"rank": 1, "local_rank": local_rank}
+        record = make_record(rank=1, config={"backend": fields} if nested else fields)
+        record = record.model_copy(
+            update={"context": record.context.model_copy(update={"deploy_component": "standalone"})}
+        )
+
+        with pytest.raises(AssertionError, match="Unexpected standalone local rank"):
+            normalize_record(record)
+
+    @pytest.mark.parametrize("nested", [False, True])
+    def test_other_deployments_keep_local_rank_literal(self, make_record: Callable, nested: bool) -> None:
+        """The single-node standalone rule does not change other deployment layouts."""
+        fields = {"local_rank": 1}
+        record = make_record(rank=7, config={"backend": fields} if nested else fields)
+        assert normalize_record(record) == record.config
+
+
+class TestObservedRunIds:
+    def test_unused_registration_does_not_shift_the_used_run_id(self, make_record: Callable) -> None:
+        """Unused CLI defaults cannot change the snapshot of the selected run ID."""
+        record = make_record(config={"tinker_checkpoint_root": "/checkpoints/selected"})
+        original = record.model_copy(
+            update={
+                "generated_values": [
+                    ConfigSnapshotGeneratedValue(kind="run_id", name="0000", value="selected"),
+                ]
+            }
+        )
+        shifted = record.model_copy(
+            update={
+                "generated_values": [
+                    ConfigSnapshotGeneratedValue(kind="run_id", name="0000", value="unused"),
+                    ConfigSnapshotGeneratedValue(kind="run_id", name="0001", value="selected"),
+                ]
+            }
+        )
+        assert dump_snapshot(ConfigSnapshotConverter.convert([original])) == dump_snapshot(
+            ConfigSnapshotConverter.convert([shifted])
+        )
+
+    def test_swapping_used_run_ids_between_paths_remains_visible(self, make_record: Callable) -> None:
+        """Canonical numbering preserves distinct references when both generated IDs are used."""
+        metadata = [
+            ConfigSnapshotGeneratedValue(kind="run_id", name=f"{i:04d}", value=value)
+            for i, value in enumerate(["unused", "first", "second"])
+        ]
+        records = [
+            make_record(config={"save": f"/checkpoints/{a}", "load": f"/checkpoints/{b}"}).model_copy(
+                update={"generated_values": metadata}
+            )
+            for a, b in [("first", "second"), ("second", "first")]
+        ]
+        assert dump_snapshot(ConfigSnapshotConverter.convert([records[0]])) != dump_snapshot(
+            ConfigSnapshotConverter.convert([records[1]])
+        )

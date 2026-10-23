@@ -36,6 +36,8 @@ class _InitSdk:
     def load_checkpoint(self, **kwargs: Any) -> tuple[int, int]:
         self.observations["load"] = self._runtime_fields()
         self.checkpointing_context = kwargs["checkpointing_context"]
+        if self.peer_sources:
+            assert self.args.backend.pretrained_checkpoint is None
         self.args.backend.consumed_train_samples = 64
         if self.failure == "load":
             raise RuntimeError("checkpoint SDK failed")
@@ -83,25 +85,33 @@ def _init_worker(
     if peer:
         flags.extend(
             [
+                "--pretrained-checkpoint",
+                str(path / "startup-fallback"),
                 "--indep-dp",
                 "--use-dynamic-batch-size",
                 "--max-tokens-per-gpu",
                 "1024",
                 "--non-persistent-ckpt-type",
                 "local",
+                "--non-persistent-local-ckpt-dir",
+                str(path / "local"),
                 "--non-persistent-local-ckpt-algo",
                 "atomic",
             ]
         )
     config = parse_megatron_test_config(*flags)
     trainer = next(item for item in config.raw_megatron.trainers if item.role == role)
-    args = compute_trainer_config(config, trainer)
+    args = compute_trainer_config(config, trainer).model_copy(
+        update={"clear_quantized_weight_workspaces_on_offload": False}
+    )
     worker = object.__new__(actor_module.MegatronTrainRayActor)
     worker._init_once = InitOnce("MegatronTrainRayActor")
     worker._heartbeat = Mock()
     worker._rank = 0
     sdk = _InitSdk(args=args, iteration=iteration, failure=failure)
     _install_process_environment(actor_module=actor_module, args=args, monkeypatch=monkeypatch)
+    monkeypatch.setattr(actor_module, "print_memory", lambda *args, **kwargs: None)
+    monkeypatch.setattr(actor_module, "clear_memory", lambda *args, **kwargs: None)
     monkeypatch.setattr(model, "get_model", sdk.get_model)
     monkeypatch.setattr(checkpoint, "_load_checkpoint_megatron", sdk.load_checkpoint)
     monkeypatch.setattr(checkpoint_transfer, "PGTransport", sdk.create_transport)

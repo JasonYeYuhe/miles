@@ -12,8 +12,8 @@ class TestScenarioSnapshotStorage:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """An updated scenario has one current representation that reconstructs from its declared baseline."""
-        base = {f"item-{index:03d}": f"stable-value-{index:03d}" for index in range(200)}
-        variant = base | {"changed": "new-value"}
+        base = {f"item-{index:03d}": {"value": f"stable-value-{index:03d}"} for index in range(200)}
+        variant = base | {"changed": {"value": "new-value"}}
         stale_yaml = tmp_path / "variant.yaml"
         stale_diff = tmp_path / "variant.diff"
         unrelated = tmp_path / "unrelated.yaml"
@@ -29,6 +29,7 @@ class TestScenarioSnapshotStorage:
 
         delta = (tmp_path / "variant.delta.yaml").read_text()
         baseline = (tmp_path / "base.yaml").read_text()
+        assert len(delta.encode()) < len(baseline.encode())
         assert yaml.safe_load(baseline) == base
         assert yaml.safe_load(delta)["base"] == "base"
         assert yaml.safe_load(expand_snapshot_delta(base=baseline, delta=delta)) == variant

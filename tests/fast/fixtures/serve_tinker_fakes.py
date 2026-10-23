@@ -28,6 +28,7 @@ async def tinker_startup(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Simpl
         no_load_rng=None,
         finetune=None,
         ckpt_step=None,
+        exit_on_missing_checkpoint=False,
         multi_lora=True,
         load=None,
         hf_checkpoint="base-model",

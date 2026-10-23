@@ -1,11 +1,14 @@
 import importlib
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
 from tests.fast.fixtures.args_fixtures import make_trainer_config
+from tests.fast.miles_plugins.models.qwen3_8_next.conftest import gdn
 
 from miles_plugins.models import glm4
+
+__all__ = ["gdn"]
 
 
 class TestBackendOwnedSpecs:
@@ -40,7 +43,7 @@ class TestBackendOwnedSpecs:
     @pytest.mark.parametrize("family", ["qwen3_5", "qwen3_next", "qwen3_8_next.qwen3_8_next"])
     @pytest.mark.parametrize("num_experts", [None, 4])
     def test_qwen_spec_uses_backend_expert_count_before_building_the_real_layer_plan(
-        self, monkeypatch: pytest.MonkeyPatch, family: str, num_experts: int | None
+        self, monkeypatch: pytest.MonkeyPatch, family: str, num_experts: int | None, gdn: ModuleType
     ) -> None:
         """Dense Qwen models reset the MoE cadence before SDK block construction."""
         module = importlib.import_module(f"miles_plugins.models.{family}")

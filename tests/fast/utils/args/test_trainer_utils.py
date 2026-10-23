@@ -169,12 +169,13 @@ class TestSinglePolicyCriticCheckpointRequests:
 
 
 class TestCriticLoadDefaultBoundaries:
-    def test_non_megatron_default_still_uses_the_resolved_actor_source(self, tmp_path: Path) -> None:
-        """Non-Megatron parsing keeps its existing eager critic default."""
+    def test_non_megatron_default_keeps_the_requested_actor_source(self, tmp_path: Path) -> None:
+        """FSDP parsing preserves the requested load instead of applying Megatron fallback resolution."""
         reference = str(tmp_path / "reference")
         args = parse_fsdp_test_config("--load", str(tmp_path / "missing"), "--ref-load", reference)
 
-        assert args.critic_load == reference
+        assert args.critic_load == args.load == str(tmp_path / "missing")
+        assert args.ref_load == reference
 
     def test_named_megatron_preserves_an_unset_critic_source_and_inherits_the_checkpoint_root(
         self, tmp_path: Path

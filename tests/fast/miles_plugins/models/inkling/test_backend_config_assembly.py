@@ -1,21 +1,20 @@
 import json
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
 import torch
 from tests.fast.fixtures.args_fixtures import make_trainer_config
 
-from miles_plugins.models.inkling import model
-
 
 class TestInklingBackendAssembly:
     @pytest.mark.parametrize("enabled", [False, True])
     def test_provider_builds_the_real_transformer_config_from_backend_fields(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, enabled: bool
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, enabled: bool, inkling_model: ModuleType
     ) -> None:
         """The real provider and builder preserve backend settings in the allocated model config."""
+        model = inkling_model
         text = dict(
             num_attention_heads=4,
             num_key_value_heads=4,
@@ -87,7 +86,7 @@ class TestInklingBackendAssembly:
             config.num_layers_in_last_pipeline_stage,
         ) == (2, 2, 3, enabled, enabled, 2 if enabled else 1, 2 if enabled else 1, enabled, enabled, enabled, 1, 1)
         assert config.params_dtype == (torch.bfloat16 if enabled else torch.float32)
-        assert config.pipeline_dtype == config.params_dtype
+        assert config.pipeline_dtype == torch.float32
         assert config.inkling.hidden_size == 16
         assert config.moe_layer_freq == [1] * 6
         assert config.moe_activation_in_fp32 and config.moe_combine_in_fp32

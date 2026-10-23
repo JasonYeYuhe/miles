@@ -13,8 +13,18 @@ __all__ = ["actor_module"]
 
 
 class TestActorInitCheckpointScope:
-    @pytest.mark.parametrize("role", ["actor", "critic"])
-    @pytest.mark.parametrize("mode", ["fresh", "resume", "peer", "explicit"])
+    @pytest.mark.parametrize(
+        "role,mode",
+        [
+            ("actor", "fresh"),
+            ("critic", "fresh"),
+            ("actor", "resume"),
+            ("critic", "resume"),
+            ("actor", "peer"),
+            ("actor", "explicit"),
+            ("critic", "explicit"),
+        ],
+    )
     @pytest.mark.parametrize("failure", [None, "build", "load"])
     def test_initialization_applies_only_the_current_request_and_cleans_every_exit(
         self,
@@ -56,6 +66,7 @@ class TestActorInitCheckpointScope:
             else IndepDPInfo.create_trivial()
         )
         assert CHECKPOINT_LOAD_FIELDS.isdisjoint(vars(sdk.args.backend))
+        original_pretrained_checkpoint = sdk.args.backend.pretrained_checkpoint
 
         def initialize() -> int:
             return inspect.unwrap(actor_module.MegatronTrainRayActor.init)(
@@ -77,6 +88,7 @@ class TestActorInitCheckpointScope:
             with pytest.raises(RuntimeError, match="SDK failed"):
                 initialize()
 
+        assert sdk.args.backend.pretrained_checkpoint == original_pretrained_checkpoint
         assert sdk.observations["build"] == expected_fields
         if failure != "build":
             assert sdk.observations["load"] == expected_fields

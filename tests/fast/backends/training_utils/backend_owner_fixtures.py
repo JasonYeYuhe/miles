@@ -18,14 +18,25 @@ def native_backend_owner_state(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def uneven_policy_batch() -> dict:
+    return _policy_batch(response_lengths=[2, 6])
+
+
+@pytest.fixture
+def single_token_policy_batch() -> dict:
+    return _policy_batch(response_lengths=[1, 3])
+
+
+def _policy_batch(*, response_lengths: list[int]) -> dict:
     return {
-        "advantages": [torch.tensor([1.0]), torch.full((3,), 3.0)],
-        "log_probs": [torch.log(torch.full((1,), 0.5)), torch.log(torch.full((3,), 0.5))],
-        "rollout_log_probs": [torch.log(torch.full((1,), 0.5)), torch.log(torch.full((3,), 0.5))],
-        "unconcat_tokens": [torch.tensor([0, 1]), torch.tensor([0, 1, 0, 1])],
-        "response_lengths": [1, 3],
-        "total_lengths": [2, 4],
-        "loss_masks": [torch.ones(1), torch.ones(3)],
+        "advantages": [
+            torch.full((length,), advantage) for length, advantage in zip(response_lengths, (1.0, 3.0), strict=True)
+        ],
+        "log_probs": [torch.log(torch.full((length,), 0.5)) for length in response_lengths],
+        "rollout_log_probs": [torch.log(torch.full((length,), 0.5)) for length in response_lengths],
+        "unconcat_tokens": [torch.arange(length + 1) % 2 for length in response_lengths],
+        "response_lengths": response_lengths,
+        "total_lengths": [length + 1 for length in response_lengths],
+        "loss_masks": [torch.ones(length) for length in response_lengths],
     }
 
 
