@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import argparse
 
-
 import pytest
+from tests.fast.fixtures.args_fixtures import sglang_router_args
 
 pytest.importorskip("sglang")
 
@@ -95,7 +95,7 @@ def test_a_session_server_without_key_routing_warns(
     args.true_on_policy_mode = False
     args.use_session_server = "v1"
     args.router_assignment_mode = "random"
-    args.use_miles_router = use_miles_router
+    vars(args).update(sglang_router_args(args.sglang_router_policy), use_miles_router=use_miles_router)
 
     with caplog.at_level("WARNING"):
         validate_args(args)

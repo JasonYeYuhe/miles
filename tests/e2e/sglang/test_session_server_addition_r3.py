@@ -89,6 +89,9 @@ def _serve_session(backend_url: str) -> Iterator[str]:
         lora_adapter_path=None,
         use_miles_router=False,
         sglang_router_policy="manual",
+        router_policy=None,
+        router_prefill_policy=None,
+        router_decode_policy=None,
     )
     config = compute_session_server_config(
         args,

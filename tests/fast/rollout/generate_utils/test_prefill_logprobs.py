@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+from tests.fast.fixtures.args_fixtures import sglang_router_args
 
 from miles.rollout.generate_utils import prefill_logprobs
 from miles.utils.types import Sample
@@ -81,8 +82,7 @@ async def test_recompute_samples_flushes_each_batch_and_batches_prefill_score(mo
     args = SimpleNamespace(
         recompute_logprobs_via_prefill=True,
         sglang_enable_lora=False,
-        sglang_router_policy="round_robin",
-        use_miles_router=False,
+        **sglang_router_args("round_robin"),
     )
     calls = []
 
@@ -124,8 +124,7 @@ async def test_recompute_samples_batches_by_logprob_start_len(monkeypatch):
     args = SimpleNamespace(
         recompute_logprobs_via_prefill=True,
         sglang_enable_lora=False,
-        sglang_router_policy="round_robin",
-        use_miles_router=False,
+        **sglang_router_args("round_robin"),
     )
     calls = []
 
