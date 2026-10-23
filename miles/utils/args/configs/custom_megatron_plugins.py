@@ -43,7 +43,17 @@ class Dsv4MegatronPluginsConfig(BaseConfig):
 
 class DsaMegatronPluginsConfig(BaseConfig):
     dsa_impl: A[str, Arg(choices=["miles", "megatron"])] = "miles"
-    miles_dsa_topk_backend: A[str, Arg(choices=["torch", "flashinfer"])] = "torch"
+    miles_dsa_topk_backend: A[
+        str,
+        Arg(
+            choices=["canonical", "torch", "flashinfer"],
+            help=(
+                "DSA indexer top-k backend for both raw DSA implementations. 'canonical' is the exact top-k with "
+                "ties at the k-th score broken toward the smaller key, like the rollout's top-k, returned in "
+                "ascending key order; native Megatron DSA runs it as its exact 'torch' top-k."
+            ),
+        ),
+    ] = "canonical"
 
     @classmethod
     def add_arguments(cls, parser: ArgumentParser) -> None:
