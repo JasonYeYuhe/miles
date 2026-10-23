@@ -212,8 +212,7 @@ class Glm5NextAttentionSpec(MLAAttentionSpec):
         return ",".join(dict.fromkeys(names))
 
     def attach(self, block: nn.Module, layer: nn.Module, context: AttachContext) -> int:
-        # only KDA layers carry the HF-style KDA module
-        if hasattr(block, "kda"):
+        if hasattr(block, "kda"):  # config-access-exempt: only KDA layers carry the HF-style KDA module
             return attach_layout(block.kda, self.kda_layout, layer, context)
         return attach_layout(block, self.layout, layer, context)
 

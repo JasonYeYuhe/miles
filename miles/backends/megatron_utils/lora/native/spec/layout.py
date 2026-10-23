@@ -50,7 +50,9 @@ def host_out_local(host_attr: str) -> DimFn:
     """This rank's output width of the host linear ``host_attr``, read from its weight."""
 
     def resolve(module: nn.Module, _context: AttachContext) -> int:
-        return getattr(module, host_attr).weight.shape[0]
+        return getattr(module, host_attr).weight.shape[
+            0
+        ]  # config-access-exempt: the architecture layout names the projection host attribute
 
     return resolve
 

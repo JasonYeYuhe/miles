@@ -1292,7 +1292,9 @@ def miles_validate_args(args):
         )
         if has_megatron_checkpoint(
             args.requested_load,
-            ckpt_step=getattr(args, "ckpt_step", None) if args.load == args.requested_load else None,
+            ckpt_step=(
+                getattr(args, "ckpt_step", None) if args.load == args.requested_load else None
+            ),  # config-access-exempt: native backend parsers do not define the Megatron step selector
         ):
             raise ValueError(
                 "--update-weight-transfer-mode=disk-delta cannot resume from a training checkpoint: "
