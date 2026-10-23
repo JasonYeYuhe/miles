@@ -3435,15 +3435,23 @@ def _resolve_sample_ownership_check(args: argparse.Namespace) -> None:
         )
 
 
+def _apply_custom_config(args, data: dict) -> None:
+    # configs written before --router
+    if data.pop("use_miles_router", False):
+        data["router"] = RouterKind.MILES.value
+    for k, v in data.items():
+        if hasattr(args, k):
+            logger.info(f"Warning: Argument {k} is already set to {getattr(args, k)}, will override with {v}.")
+        setattr(args, k, v)
+    # a config file bypasses the --router choices
+    RouterKind(args.router)
+
+
 def miles_validate_args(args):
     from miles.backends.training_utils.weight_update.session import weight_update_selector
 
     if args.custom_config_path:
-        data = yaml.safe_load(resolve_file_arg(args.custom_config_path)) or {}
-        for k, v in data.items():
-            if hasattr(args, k):
-                logger.info(f"Warning: Argument {k} is already set to {getattr(args, k)}, will override with {v}.")
-            setattr(args, k, v)
+        _apply_custom_config(args, yaml.safe_load(resolve_file_arg(args.custom_config_path)) or {})
 
     mode = args.update_weight_transfer_mode
     if mode not in ("broadcast", "broadcast_packed", "p2p", "disk-delta"):

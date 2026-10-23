@@ -20,6 +20,7 @@ from miles.backends.sglang_utils.arguments import validate_args as validate_sgla
 from miles.backends.torchtitan_utils.arguments import build_torchtitan_parser
 from miles.utils.arguments import (
     FULLY_ASYNC_ROLLOUT_PATH,
+    _apply_custom_config,
     _compute_custom_inference_engine_provider_path,
     _compute_rollout_external,
     _maybe_apply_dumper_overrides,
@@ -174,6 +175,25 @@ class TestRouterFlag:
     def test_an_unknown_router_is_rejected_at_parse_time(self):
         with pytest.raises(SystemExit):
             self._parse(["--router", "dynamo"])
+
+    @pytest.mark.parametrize(
+        ("config", "expected"),
+        [
+            ({"use_miles_router": True}, "miles"),
+            ({"use_miles_router": False}, "sglang"),
+            ({"router": "miles"}, "miles"),
+        ],
+        ids=["legacy-key", "legacy-key-off", "router-key"],
+    )
+    def test_a_config_file_selects_the_router(self, config: dict, expected: str):
+        """A legacy `use_miles_router: true` config must not silently fall back to sgl-router."""
+        args = self._parse([])
+        _apply_custom_config(args, config)
+        assert args.router == expected
+
+    def test_an_unknown_router_in_a_config_file_is_rejected(self):
+        with pytest.raises(ValueError, match="dynamo"):
+            _apply_custom_config(self._parse([]), {"router": "dynamo"})
 
 
 class TestFullyAsyncDataBufferFlags:
