@@ -115,6 +115,7 @@ async def update_sample_from_response(
         )
 
     # Update sample with tokens directly - avoiding re-tokenization
+    sample.generated_token_count = sample.generated_tokens + len(new_response_tokens)
     sample.tokens = sample.tokens + new_response_tokens
     sample.response_length += len(new_response_tokens)
     sample.response += output["text"]

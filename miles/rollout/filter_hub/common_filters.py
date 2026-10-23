@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import torch
 
 from miles.rollout.filter_hub.base_types import FilterOutput, call_dynamic_filter, iter_samples
+from miles.rollout.reward_shaping import apply_length_penalty
 from miles.utils.types import Sample
 
 Group = list[Sample | list[Sample]]
@@ -93,7 +94,10 @@ def apply_missing_reward_filter(args: Namespace, samples: Group, **kwargs) -> Fi
 
 
 def apply_reward_nonzero_std_filter(args, samples: list[Sample | list[Sample]], **kwargs):
-    rewards = [sample.get_reward_value(args) for sample in iter_samples(samples)]
+    flat_samples = list(iter_samples(samples))
+    rewards = [sample.get_reward_value(args) for sample in flat_samples]
+    # Filtering happens on a complete prompt group, before train-data conversion.
+    rewards = apply_length_penalty(args, flat_samples, rewards, [list(range(len(flat_samples)))])
     keep = torch.tensor(rewards, dtype=torch.float64).std() > 1e-8
     return FilterOutput(
         keep=keep,

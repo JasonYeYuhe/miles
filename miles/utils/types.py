@@ -179,6 +179,9 @@ class Sample:
     # response
     response: str = ""
     response_length: int = 0
+    # Generated-token contribution to the rollout, independent of loss masking.
+    # Session assemblers count shared or discarded calls once across sibling rows.
+    generated_token_count: int | None = None
     label: str | None = None
     reward: float | dict[str, Any] | None = None
     loss_mask: list[int] | None = None
@@ -343,6 +346,11 @@ class Sample:
     def effective_response_length(self):
         return sum(self.loss_mask) if self.loss_mask is not None else self.response_length
 
+    @property
+    def generated_tokens(self) -> int:
+        """Custom producers may omit the count when their loss mask marks generation exactly."""
+        return self.generated_token_count if self.generated_token_count is not None else self.effective_response_length
+
     def validate(self):
         assert self.response_length >= 0, f"response_length must be >= 0, got {self.response_length}"
         assert (
@@ -453,6 +461,7 @@ class Sample:
         self.multimodal_train_inputs = None
         self.response = ""
         self.response_length = 0
+        self.generated_token_count = None
         self.reward = None
         self.loss_mask = None
         self.weight_versions = []

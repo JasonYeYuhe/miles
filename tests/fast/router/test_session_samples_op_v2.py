@@ -211,6 +211,7 @@ async def test_assembled_samples_golden_merged(core):
     assert m.tokens == _ACCUMULATED
     assert m.response == tokenizer.decode([10, 11]) + tokenizer.decode([20, 21]) + tokenizer.decode([30, 31])
     assert m.response_length == 6
+    assert m.generated_tokens == 4
     assert m.loss_mask == [1, 1, 0, 0, 1, 1]
     assert m.rollout_log_probs == [-0.125, -0.25, 0.0, 0.0, -0.5, -1.0]
     assert m.status == Sample.Status.COMPLETED
@@ -999,6 +1000,8 @@ async def test_custom_picker_keeps_abandoned_leaf(core):
         assert response.status_code == 200
         reply = decode_samples_and_merge_input_sample(bytes(response.body), Sample(), fields=COMPUTED_FIELDS_V2)
         abandoned, replacement = reply.samples
+        assert sum(sample.generated_tokens for sample in reply.samples) == 4
+        assert [sample.generated_token_count for sample in reply.samples] == [4, 0]
         assert abandoned.tokens == [1, 2, 3, 10, 11, 20, 30]
         assert replacement.tokens == [1, 2, 3, 10, 11, 21, 31]
         # Exactly-once over the SURVIVING set: the abandoned (earlier) leaf now

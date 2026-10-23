@@ -323,6 +323,10 @@ class SessionCore:
                 samples = [merge_samples_with_addition_r3(self.config, samples, session.records, tokenizer)]
             else:
                 samples = [merge_samples(samples, tokenizer)]
+            # Count every generated token, including calls cut from the training prefix.
+            samples[0].generated_token_count = sum(
+                len(record.response["choices"][0]["meta_info"]["output_token_logprobs"]) for record in session.records
+            )
         except (AssertionError, ValueError) as exc:
             return Response(content=str(exc).encode(), status_code=422, media_type="text/plain")
         return _samples_response(encode_samples(samples, metadata, fields=fields))

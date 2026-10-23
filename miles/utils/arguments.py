@@ -24,6 +24,7 @@ from miles.backends.sglang_utils.arguments import validate_args as sglang_valida
 from miles.dashboard.args import add_dashboard_arguments, validate_dashboard_args
 from miles.ray.specs.train import compute_trainer_ids, external_trainer_controller_addrs
 from miles.rollout.checkpoint_eval import is_checkpoint_eval_fn
+from miles.rollout.reward_shaping import validate_length_penalty_args
 from miles.utils.audit_utils.event_logger.logger import EVENTS_DIRNAME
 from miles.utils.chat_template_utils.tito_tokenizer import TITOTokenizerType
 from miles.utils.env_report.launcher_report import LAUNCHER_REPORT_ENV_VAR
@@ -2491,6 +2492,18 @@ def get_miles_extra_args_provider(add_custom_arguments=None):
 
         def add_reward_model_arguments(parser):
             parser.add_argument(
+                "--length-penalty-coeff",
+                type=float,
+                default=0.0,
+                help="Non-negative exponent for group-relative correct-trajectory length penalties; zero disables shaping.",
+            )
+            parser.add_argument(
+                "--length-penalty-min-tokens",
+                type=int,
+                default=1,
+                help="Positive floor on the shortest correct trajectory's generated-token count.",
+            )
+            parser.add_argument(
                 "--rm-type",
                 type=str,
                 default=None,
@@ -3455,6 +3468,7 @@ def miles_validate_args(args):
             setattr(args, k, v)
 
     mode = args.update_weight_transfer_mode
+    validate_length_penalty_args(args)
     if mode not in ("broadcast", "broadcast_packed", "p2p", "disk-delta"):
         raise ValueError(f"Unknown --update-weight-transfer-mode {mode!r}")
     if mode == "broadcast_packed" and (args.train_backend != "megatron" or args.colocate):
