@@ -31,12 +31,22 @@ def normalize_record(
     if isinstance(context.source, TrainProcessIdentity):
         if not isinstance(config, dict) or not isinstance(args := config.get("args"), dict):
             raise ValueError("Training snapshots require a config.args object")
+        if context.deploy_component == "standalone" and "local_rank" in args:
+            assert (
+                type(args["local_rank"]) is int and args["local_rank"] == context.source.rank_within_cell
+            ), f"Unexpected standalone local rank: {args['local_rank']!r}"
+            args["local_rank"] = _RANK
         if "rank" in args:
             assert type(args["rank"]) is int and args["rank"] >= 0, f"Unexpected args.rank: {args['rank']!r}"
             args["rank"] = _RANK
         if "backend" in args:
             backend = args["backend"]
             assert isinstance(backend, dict), "Training snapshots require a config.args.backend object"
+            if context.deploy_component == "standalone" and "local_rank" in backend:
+                assert (
+                    type(backend["local_rank"]) is int and backend["local_rank"] == context.source.rank_within_cell
+                ), f"Unexpected standalone local rank: {backend['local_rank']!r}"
+                backend["local_rank"] = _RANK
             if "rank" in backend:
                 assert (
                     type(backend["rank"]) is int and backend["rank"] >= 0
@@ -54,6 +64,9 @@ _PATH_FIELDS = frozenset(
         "critic_load",
         "ref_load",
         "dump_details",
+        "dumper_dir",
+        "dumper_source_patcher_config_train",
+        "dumper_source_patcher_config_inference",
         "save_debug_event_data",
         "save_debug_train_data",
         "save_debug_trajectory_data",
@@ -62,6 +75,7 @@ _PATH_FIELDS = frozenset(
         "ci_save_grad_norm",
         "te_precision_config_file",
         "eval_hf_dir",
+        "tinker_checkpoint_root",
     }
 )
 
@@ -184,7 +198,14 @@ def collect_generated_values(
                 key = (entry.kind, entry.name)
                 if observed.setdefault(key, entry) != entry:
                     raise ValueError(f"Conflicting generated snapshot value for {generation}/{key}")
-        result[generation] = list(observed.values())
+        values = []
+        run_index = 0
+        for entry in observed.values():
+            if entry.kind == "run_id" and entry.name.isdecimal():
+                entry = entry.model_copy(update={"name": f"{run_index:04d}"})
+                run_index += 1
+            values.append(entry)
+        result[generation] = values
     return result
 
 
