@@ -69,6 +69,14 @@ def _mutated_payload(payload: bytes, mutate) -> bytes:
 
 
 class TestSamplesWireCodec:
+    @pytest.mark.parametrize("fields", [COMPUTED_FIELDS, COMPUTED_FIELDS_V2])
+    def test_generated_token_count_survives_wire_and_loss_masking(self, fields: tuple[str, ...]) -> None:
+        sample = _computed_sample(generated_token_count=123, loss_mask=[0, 0])
+        payload = encode_samples([sample], {}, None, fields=fields)
+        reply = decode_samples_and_merge_input_sample(payload, Sample(), fields=fields)
+        assert reply.samples[0].generated_tokens == 123
+        assert reply.samples[0].effective_response_length == 0
+
     def test_round_trip_overlays_computed_and_keeps_template(self):
         template = Sample(
             group_index=7,

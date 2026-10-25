@@ -260,6 +260,7 @@ async def generate(
         )
 
     # Update sample with tokens directly - avoiding re-tokenization
+    sample.generated_token_count = sample.generated_tokens + len(new_response_tokens)
     sample.tokens = sample.tokens + new_response_tokens
     sample.response_length += len(new_response_tokens)
     sample.response += output["text"]
@@ -319,6 +320,7 @@ async def generate_and_rm(
 
     # mask previous off-policy generation for partial rollout
     if args.partial_rollout and args.mask_offpolicy_in_partial_rollout and sample.response_length > 0:
+        sample.generated_token_count = sample.generated_tokens
         sample.loss_mask = [0] * sample.response_length
 
     # For samples with existing response, check if they're complete
