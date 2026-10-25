@@ -328,3 +328,43 @@ ROLLOUT_ARGS+=(
 That is the entire delta from the stock GRPO recipe, with no source changes to Miles.
 
 → Next: [Server arguments reference](/user-guide/cli-reference)
+
+For built-in group-relative length shaping, see [Length penalties](#length-penalties).
+
+## Length penalties
+
+Enable training reward shaping with `--length-penalty-coeff 1.0`. Only trajectories
+whose selected raw reward is exactly `1.0` are penalized. For each prompt group,
+let `L` be a trajectory's total generated-token count, `L_min` the shortest correct
+trajectory's count, `m` the `--length-penalty-min-tokens` floor, and `c` the coefficient:
+
+```text
+shaped_reward = max(1, L / max(m, L_min)) ** (-c)
+```
+
+The coefficient defaults to zero (disabled) and must be finite and non-negative.
+The minimum defaults to one token and must be a positive integer. Incorrect
+rewards and groups with no correct trajectories are unchanged. Ties and correct
+trajectories at or below the reference length keep reward `1.0`. For example,
+with `c=1`, doubling the reference length gives reward `0.5`.
+
+Shaping runs before group reward normalization. Accuracy logging and evaluation
+retain raw rewards. The built-in nonzero-standard-deviation sampling filter uses
+shaped rewards so all-correct groups with useful length differences can survive.
+
+Lengths exclude prompts and tool outputs, and include model-generated reasoning,
+answers, and tool calls across all turns. Session servers count all recorded
+calls, including discarded branches and calls beyond the training token budget,
+once per rollout. Sibling training samples share one rollout reward.
+
+Custom generation code should populate `Sample.generated_token_count` with each
+sample's contribution to the rollout's total, counting shared generation once.
+If omitted, Miles uses the sum of the loss mask, or `response_length` when no
+mask exists. This fallback is valid only when the mask marks every generated
+token; custom producers that mask generated tokens must provide the explicit count.
+Built-in producers preserve it across partial-rollout masking and the session wire.
+
+Nonzero length shaping cannot be combined with custom reward postprocessing or
+custom train-data conversion, since those hooks replace the built-in pipeline.
+Custom filters must account for shaped rewards themselves if they discard groups
+based on raw reward variance.
