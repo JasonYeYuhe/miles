@@ -35,6 +35,7 @@ SAMPLES_VALUE_SPEC: dict[str, ValueSpec] = {
     "tokens": ValueSpec("tensor_list", np.dtype(np.int64), null=[]),
     "response": ValueSpec("json"),
     "response_length": ValueSpec("json"),
+    "generated_token_count": ValueSpec("json"),
     "loss_mask": ValueSpec("tensor_list", np.dtype(np.uint8)),
     "rollout_log_probs": ValueSpec("tensor_list", np.dtype(np.float64)),
     "rollout_topk_token_ids": ValueSpec("tensor", np.dtype(np.int32), strict=True),

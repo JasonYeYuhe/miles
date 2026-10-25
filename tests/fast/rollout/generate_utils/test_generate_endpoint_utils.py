@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
-from miles.rollout.generate_utils.generate_endpoint_utils import compute_request_payload
+from miles.rollout.generate_utils.generate_endpoint_utils import compute_request_payload, update_sample_from_response
+from miles.utils.types import Sample
 
 
 def _make_args() -> SimpleNamespace:
@@ -33,3 +34,20 @@ class TestComputeRequestPayloadExtraKey:
 
         assert halt_status is None
         assert payload["extra_key"] == "train:-:7"
+
+
+async def test_generation_count_accumulates_across_masked_partial_rollouts() -> None:
+    args = _make_args()
+    args.sglang = SimpleNamespace(common_value=lambda name: None)
+    sample = Sample(tokens=[1, 10, 11, 12], response_length=3, generated_token_count=3, loss_mask=[0, 0, 0])
+    output = {
+        "text": "next",
+        "meta_info": {"output_token_logprobs": [(-0.1, 20), (-0.2, 21)], "finish_reason": {"type": "stop"}},
+    }
+    await update_sample_from_response(args, sample, {"input_ids": [1]}, output, update_loss_mask=True)
+    assert sample.generated_tokens == 5
+    assert sample.effective_response_length == 2
+    sample.loss_mask = [0] * sample.response_length
+    await update_sample_from_response(args, sample, {"input_ids": [1]}, output, update_loss_mask=True)
+    assert sample.generated_tokens == 7
+    assert sample.effective_response_length == 2
