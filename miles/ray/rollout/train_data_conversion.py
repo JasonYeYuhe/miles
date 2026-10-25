@@ -4,7 +4,7 @@ from typing import Any
 import torch
 
 from miles.rollout.generate_utils.rollout_topk_logprobs import validate_rollout_topk_logprobs_sample
-from miles.rollout.reward_shaping import reward_group_segments, rollout_segments
+from miles.rollout.reward_shaping import apply_length_penalty, reward_group_segments, rollout_segments
 from miles.utils.args.custom_view import compute_custom_function_config
 from miles.utils.audit_utils.sample_ownership.recorder import SampleOwnershipRecorder
 from miles.utils.dp_schedule import TrainParallelConfig, build_dp_schedule
@@ -317,11 +317,16 @@ def _post_process_rewards(
         return f(fn_args, samples)
 
     raw_rewards = [sample.get_reward_value(args) for sample in samples]
+    rewards = raw_rewards
+    if getattr(args, "length_penalty_coeff", 0.0) > 0:
+        rewards = apply_length_penalty(
+            args, samples, raw_rewards, _reward_group_segments(args, samples, prompt_group_sizes)
+        )
     if args.advantage_estimator in ["grpo", "gspo", "reinforce_plus_plus_baseline"] and args.rewards_normalization:
-        normalized_rewards = _normalize_rewards_by_rollout(args, samples, raw_rewards, prompt_group_sizes)
+        normalized_rewards = _normalize_rewards_by_rollout(args, samples, rewards, prompt_group_sizes)
         return raw_rewards, normalized_rewards
 
-    return raw_rewards, raw_rewards
+    return raw_rewards, rewards
 
 
 def split_train_data_by_dp(
