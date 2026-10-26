@@ -364,6 +364,13 @@ prefixes count once through the postprocessor's training-mask ownership;
 retained sibling samples contribute their own trainable tokens to one rollout
 total and share its shaped reward.
 
+Training-data conversion emits one `Length penalty:` INFO log per session/rollout,
+before advantage normalization. It includes `session_id`, `rollout_id`, the total
+`generated_tokens` counted toward shaping, `multiplier` (`1` means no penalty),
+`reward_reduction`, `raw_reward`, and `shaped_reward`. Incorrect sessions and
+disabled shaping report multiplier `1`. Candidate filtering does not emit these
+logs, so filter-time calculations are not mistaken for applied training penalties.
+
 Custom generation code should populate `Sample.generated_token_count` with each
 sample's contribution to the rollout's total, counting shared generation once.
 If omitted, Miles uses the sum of the loss mask, or `response_length` when no
