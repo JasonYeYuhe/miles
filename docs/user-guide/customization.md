@@ -351,6 +351,10 @@ with `c=1`, doubling the reference length gives reward `0.5`.
 Shaping runs before group reward normalization. Accuracy logging and evaluation
 retain raw rewards. The built-in nonzero-standard-deviation sampling filter uses
 shaped rewards so all-correct groups with useful length differences can survive.
+All-correct groups are mean-centered without standard-deviation scaling, preserving
+the coefficient's control over length-only advantages. Mixed-correctness groups
+retain the configured standard-deviation normalization. The filter requires a
+shaped reward range greater than `1e-6` for all-correct groups.
 
 Lengths exclude prompts and tool outputs, and include model-generated reasoning,
 answers, and tool calls across all turns. Session servers count all recorded

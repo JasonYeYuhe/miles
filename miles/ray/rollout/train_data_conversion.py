@@ -270,6 +270,8 @@ def _normalize_rewards_by_rollout(
     samples: list[Sample],
     raw_rewards: list[float],
     prompt_group_sizes: list[int] | None,
+    *,
+    unshaped_rewards: list[float] | None = None,
 ) -> list[float]:
     """Normalize one shared reward per rollout, then broadcast it to siblings."""
     if not samples:
@@ -292,7 +294,15 @@ def _normalize_rewards_by_rollout(
 
         rollout_rewards = torch.tensor(shared_rewards, dtype=torch.float)
         normalized_rollout_rewards = rollout_rewards - rollout_rewards.mean()
-        if args.advantage_estimator in ["grpo", "gspo"] and args.grpo_std_normalization and len(rollout_rewards) > 1:
+        # In all-correct groups the only signal is length. Standardizing it would
+        # amplify arbitrarily small penalties into full-strength advantages.
+        length_only = unshaped_rewards is not None and all(unshaped_rewards[row] == 1.0 for row in prompt_segments)
+        if (
+            args.advantage_estimator in ["grpo", "gspo"]
+            and args.grpo_std_normalization
+            and len(rollout_rewards) > 1
+            and not length_only
+        ):
             rollout_std = rollout_rewards.std()
             if rollout_std > 0:
                 normalized_rollout_rewards = normalized_rollout_rewards / (rollout_std + 1e-6)
@@ -323,7 +333,9 @@ def _post_process_rewards(
             args, samples, raw_rewards, _reward_group_segments(args, samples, prompt_group_sizes)
         )
     if args.advantage_estimator in ["grpo", "gspo", "reinforce_plus_plus_baseline"] and args.rewards_normalization:
-        normalized_rewards = _normalize_rewards_by_rollout(args, samples, rewards, prompt_group_sizes)
+        normalized_rewards = _normalize_rewards_by_rollout(
+            args, samples, rewards, prompt_group_sizes, unshaped_rewards=raw_rewards
+        )
         return raw_rewards, normalized_rewards
 
     return raw_rewards, rewards

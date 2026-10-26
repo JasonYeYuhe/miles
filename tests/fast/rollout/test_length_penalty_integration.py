@@ -64,9 +64,40 @@ def test_normalization_counts_each_rollout_once(std_normalize: bool) -> None:
         Sample(index=2, rollout_id=11, group_index=0, response_length=20, reward=1.0),
     ]
     raw, rewards = _post_process_rewards(_args(grpo_std_normalization=std_normalize), samples, None)
-    positive = 0.25 / (0.5 / 2**0.5 + 1e-6) if std_normalize else 0.25
+    positive = 0.25
     assert raw == [1.0, 1.0, 1.0]
     assert rewards == pytest.approx([positive, positive, -positive])
+
+
+@pytest.mark.parametrize("estimator", ["grpo", "gspo"])
+@pytest.mark.parametrize("coeff", [0.01, 0.1, 1.0])
+def test_tiny_length_differences_keep_coefficient_scale(estimator: str, coeff: float) -> None:
+    samples = [
+        Sample(index=i, group_index=0, response_length=length, reward=1.0) for i, length in enumerate([1000, 1001])
+    ]
+    raw, rewards = _post_process_rewards(
+        _args(advantage_estimator=estimator, grpo_std_normalization=True, length_penalty_coeff=coeff), samples, None
+    )
+    delta = (1 - 1.001 ** (-coeff)) / 2
+    assert raw == [1.0, 1.0]
+    assert rewards == pytest.approx([delta, -delta], abs=1e-7)
+
+
+def test_mixed_groups_retain_std_normalization() -> None:
+    samples = [
+        Sample(index=i, group_index=0, response_length=length, reward=reward)
+        for i, (length, reward) in enumerate([(1000, 1.0), (2000, 1.0), (1000, 0.0)])
+    ]
+    _, rewards = _post_process_rewards(_args(grpo_std_normalization=True), samples, None)
+    assert rewards == pytest.approx([0.5 / (0.5 + 1e-6), 0, -0.5 / (0.5 + 1e-6)])
+
+
+def test_filter_drops_negligible_length_only_spread() -> None:
+    samples = [
+        Sample(index=i, group_index=0, response_length=length, reward=1.0) for i, length in enumerate([1000, 1001])
+    ]
+    assert not apply_reward_nonzero_std_filter(_args(length_penalty_coeff=0.0001), samples).keep
+    assert apply_reward_nonzero_std_filter(_args(length_penalty_coeff=0.01), samples).keep
 
 
 def test_zero_coefficient_disables_shaping_in_training() -> None:
