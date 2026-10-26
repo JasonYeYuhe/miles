@@ -137,6 +137,7 @@ def _compute_sample_from_openai_record(
     sample.rollout_log_probs = output_log_probs
     sample.response = tokenizer.decode(output_token_ids)
     sample.response_length = len(output_token_ids)
+    sample.generated_token_count = len(output_token_ids)
     sample.loss_mask = [1] * len(output_token_ids)
     if not evaluation and (
         record.request.get("top_logprobs") or record.request.get("sampling_logprobs_mode") == "support"

@@ -44,6 +44,16 @@ def make_sample(
 
 
 class TestMergeSamples:
+    def test_generated_count_excludes_observations_and_survives_masking(self, mock_tokenizer: MagicMock) -> None:
+        a = make_sample(tokens=[1, 2, 10], response_length=1, loss_mask=[0])
+        b = make_sample(tokens=[1, 2, 10, 20, 21, 30], response_length=1, loss_mask=[1])
+        a.generated_token_count = 5
+        b.generated_token_count = 7
+        merged = _merge_sample_pair(a, b, mock_tokenizer)
+        assert merged.response_length == 4
+        assert merged.generated_tokens == 12
+        assert merged.effective_response_length == 1
+
     @pytest.mark.parametrize("namespace", [None, "train:-:1"])
     def test_merge_preserves_matching_cache_namespaces(self, mock_tokenizer: MagicMock, namespace: str | None) -> None:
         """Merged turns preserve their shared cache namespace, including disabled partitioning."""

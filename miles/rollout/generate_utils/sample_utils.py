@@ -160,6 +160,7 @@ def _merge_sample_pair(a: Sample, b: Sample, tokenizer) -> Sample:
             multimodal_train_inputs=_merge_equal_value("multimodal_train_inputs"),
             response=a.response + obs_text + b.response,
             response_length=a.response_length + obs_len + b.response_length,
+            generated_token_count=a.generated_tokens + b.generated_tokens,
             label=_merge_equal_value("label"),
             reward=_merge_equal_value("reward"),
             loss_mask=_per_token(a, "loss_mask", 1) + [0] * obs_len + _per_token(b, "loss_mask", 1),

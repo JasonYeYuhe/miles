@@ -292,6 +292,7 @@ async def test_truncation_golden(core):
     assert last.status == Sample.Status.TRUNCATED
     assert last.tokens == _ACCUMULATED[:8]
     assert last.loss_mask == [1, 1, 0, 0, 1]
+    assert last.generated_token_count == 3
     assert last.rollout_log_probs == [-0.125, -0.25, 0.0, 0.0, -0.5]
     assert np.array_equal(last.rollout_routed_experts, _expected_r3(100, 8)[:-1])
     assert [segment["turn"] for segment in last.metadata["lifecycle"]] == [1, 2]
