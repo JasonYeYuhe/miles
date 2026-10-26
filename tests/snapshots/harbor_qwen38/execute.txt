@@ -86,8 +86,8 @@ export no_proxy=127.0.0.1 && export PYTHONUNBUFFERED=1 && ray job submit
   --sglang-max-running-requests 8
   --sglang-context-length 131072
   --sglang-chunked-prefill-size 8192
-  --sglang-router-policy cache_aware
-  --router-balance-abs-threshold 4
+  --sglang-router-policy manual
+  --router-assignment-mode min_load
   --sglang-router-port 31000
   --sglang-served-model-name qwen38-27b
   --sglang-reasoning-parser qwen3

@@ -158,7 +158,7 @@ def _build_train_args(args: ScriptArgs) -> str:
         f"--sglang-mem-fraction-static {args.sglang_mem_fraction_static} "
         f"--sglang-max-running-requests {args.sglang_max_running_requests} "
         f"--sglang-context-length {args.max_seq_len} --sglang-chunked-prefill-size 8192 "
-        "--sglang-router-policy cache_aware --router-balance-abs-threshold 4 --sglang-router-port 31000 "
+        "--sglang-router-policy manual --router-assignment-mode min_load --sglang-router-port 31000 "
         f"--sglang-served-model-name {args.agent_model_name} --sglang-reasoning-parser qwen3 "
         "--sglang-tool-call-parser qwen3_coder "
     )

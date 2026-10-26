@@ -190,7 +190,8 @@ uses 8 prompts × 32 independent episodes = 256 trajectories per update,
 131,072-token sequence and 49,152-token per-turn response limits, TP4/CP2 on the
 trainers, dynamic token batching, full activation recomputation, CPU optimizer
 offload, and a constant learning rate of 1e-6. It allows 128 concurrent
-episodes, uses cache-aware routing, and corrects async policy lag with clipped
+episodes, uses `--sglang-router-policy manual --router-assignment-mode min_load`,
+and corrects async policy lag with clipped
 importance sampling. Trainer logprobs are recomputed; it does **not** enable
 `--use-rollout-logprobs`. Host-memory HiCache is not enabled by this baseline.
 

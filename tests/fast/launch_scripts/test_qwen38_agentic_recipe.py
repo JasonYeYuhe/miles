@@ -22,7 +22,7 @@ def _module():
     return import_launch_script(REPO_ROOT / _LAUNCHER)
 
 
-def test_default_recipe_has_separate_trainers_and_cache_aware_rollouts():
+def test_default_recipe_has_separate_trainers_and_manual_min_load_rollouts():
     module = _module()
     args = module.ScriptArgs()
     argv = shlex.split(module._build_train_args(args))
@@ -32,7 +32,8 @@ def test_default_recipe_has_separate_trainers_and_cache_aware_rollouts():
         "--global-batch-size": "256",
         "--save-interval": "25",
         "--tito-model": "qwen38small",
-        "--sglang-router-policy": "cache_aware",
+        "--sglang-router-policy": "manual",
+        "--router-assignment-mode": "min_load",
         "--max-seq-len": "131072",
         "--rollout-max-response-len": "49152",
     }.items():
