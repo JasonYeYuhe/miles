@@ -1,0 +1,122 @@
+### 0
+nvidia-smi topo -m 2>/dev/null | grep -o 'NV[0-9][0-9]*' | wc -l
+
+### 1
+export no_proxy=127.0.0.1 && export PYTHONUNBUFFERED=1 && ray job submit
+  --address="http://127.0.0.1:8265"
+  --runtime-env-json='{"env_vars": {"PYTHONUNBUFFERED": "1", "CUDA_DEVICE_MAX_CONNECTIONS": "1", "NCCL_NVLS_ENABLE": "0", "no_proxy": "127.0.0.1,127.0.0.1", "MASTER_ADDR": "127.0.0.1", "HARBOR_ENV_TYPE": "e2b", "HARBOR_TASKS_DIR": "/root/datasets/tb21/tasks", "HARBOR_TRIALS_DIR": "/scratch/runs/260101-000000-000/harbor_trials", "AGENT_MODEL_NAME": "qwen38-27b", "AGENT_TIMEOUT": "28800", "PYTHONPATH": "<REPO_ROOT>:/root/Megatron-LM:<REPO_ROOT>/examples/experimental/harbor:<REPO_ROOT>/examples/swe-agent-harbor-docker:/frozen/pythonpath", "AGENT_MAX_INPUT_TOKENS": "81920", "AGENT_MAX_OUTPUT_TOKENS": "49152", "HARBOR_MAX_SEQ_LEN": "131072", "HARBOR_TERMINUS_2_ENABLE_SUMMARIZE": "false", "HARBOR_TERMINUS_2_LINEAR_HISTORY": "true", "HARBOR_RESPONSE_LENGTH_POLICY": "abort", "AGENT_TRIAL_TIMEOUT": "30600"}}'
+  -- python3 <REPO_ROOT>/train_async.py
+  --spec miles_plugins.models.qwen3_5 get_qwen3_5_spec
+  --disable-bias-linear
+  --qk-layernorm
+  --group-query-attention
+  --num-attention-heads 24
+  --num-query-groups 4
+  --kv-channels 256
+  --num-layers 64
+  --hidden-size 5120
+  --ffn-hidden-size 17408
+  --normalization RMSNorm
+  --apply-layernorm-1p
+  --position-embedding-type rope
+  --norm-epsilon 1e-6
+  --rotary-percent 0.25
+  --swiglu
+  --untie-embeddings-and-output-weights
+  --vocab-size 248320
+  --rotary-base 10000000
+  --attention-output-gate
+  --hf-checkpoint <SANDBOX>/models/Qwen3.8-27B
+  --ref-load <SANDBOX>/models/Qwen3.8-27B_torch_dist
+  --load /scratch/runs/260101-000000-000/checkpoints
+  --save /scratch/runs/260101-000000-000/checkpoints
+  --save-interval 25
+  --prompt-data /root/datasets/tb21/train.jsonl
+  --input-key prompt
+  --metadata-key metadata
+  --rollout-shuffle
+  --num-rollout 1000
+  --rollout-batch-size 8
+  --n-samples-per-prompt 32
+  --global-batch-size 256
+  --max-seq-len 131072
+  --rollout-max-response-len 49152
+  --rollout-temperature 1
+  --rollout-top-p 1
+  --rollout-top-k -1
+  --balance-data
+  --apply-chat-template-kwargs '{"enable_thinking": true, "preserve_thinking": true, "reasoning_effort": "medium"}'
+  --tensor-model-parallel-size 4
+  --context-parallel-size 2
+  --pipeline-model-parallel-size 1
+  --expert-model-parallel-size 1
+  --expert-tensor-parallel-size 1
+  --sequence-parallel
+  --recompute-granularity full
+  --recompute-method uniform
+  --recompute-num-layers 1
+  --use-dynamic-batch-size
+  --max-tokens-per-gpu 8192
+  --optimizer-cpu-offload
+  --overlap-cpu-optimizer-d2h-h2d
+  --use-precision-aware-optimizer
+  --advantage-estimator grpo
+  --kl-loss-coef 0
+  --entropy-coef 0
+  --eps-clip 0.2
+  --eps-clip-high 0.28
+  --use-tis
+  --tis-clip 2
+  --fully-async
+  --async-data-buffer-capacity-factor 2
+  --async-unused-samples-handler drop
+  --async-max-concurrent-samples 128
+  --max-weight-staleness 8
+  --pause-generation-mode in_place
+  --update-weight-transfer-mode broadcast
+  --update-weights-interval 1
+  --optimizer adam
+  --lr 1e-06
+  --lr-decay-style constant
+  --weight-decay 0.1
+  --adam-beta1 0.9
+  --adam-beta2 0.98
+  --rollout-num-gpus-per-engine 1
+  --sglang-mem-fraction-static 0.8
+  --sglang-max-running-requests 8
+  --sglang-context-length 131072
+  --sglang-chunked-prefill-size 8192
+  --sglang-router-policy cache_aware
+  --router-balance-abs-threshold 4
+  --sglang-router-port 31000
+  --sglang-served-model-name qwen38-27b
+  --sglang-reasoning-parser qwen3
+  --sglang-tool-call-parser qwen3_coder
+  --custom-generate-function-path miles.rollout.generate_hub.agentic_tool_call.generate
+  --custom-agent-function-path harbor_agent_function.run
+  --custom-rm-path generate.reward_func
+  --dynamic-sampling-filter-path miles.rollout.filter_hub.dynamic_sampling_filters.check_no_aborted
+  --tito-model qwen38small
+  --use-session-server
+  --session-server-port 30000
+  --session-server-workers 32
+  --actor-num-nodes 2
+  --actor-num-gpus-per-node 8
+  --num-gpus-per-node 8
+  --rollout-num-gpus 48
+  --attention-dropout 0
+  --hidden-dropout 0
+  --attention-backend flash
+  --accumulate-allreduce-grads-in-fp32
+  --attention-softmax-in-fp32
+  --use-miles-dashboard
+  --observe-training-entropy
+  --use-rollout-entropy
+  --log-multi-turn
+  --dump-details /scratch/runs/260101-000000-000/traces
+  --use-wandb
+  --wandb-project miles-run_qwen38_27b
+  --wandb-group 260101-000000-000
+  --wandb-key 'frozen-wandb-api-key'
+  --disable-wandb-random-suffix
+  --deploy-component all

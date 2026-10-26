@@ -112,3 +112,99 @@ This README's command has been run end to end: 8×H200, real training mode with
 the batch dials reduced, both trials scoring reward 1.0 and one GRPO step
 completed. Which sandbox providers this path has been run on is the table in
 [Sandbox Providers](../../../docs/user-guide/sandbox-providers.md).
+
+## Qwen3.8-27B on Terminal-Bench 2.1
+
+[`run_qwen38_27b.py`](./run_qwen38_27b.py)
+is a full-parameter, fully asynchronous GRPO example for **8 nodes of 8 H200s**:
+2 trainer nodes and 6 rollout nodes. It uses this example's in-process Harbor
+integration, E2B sandboxes, and Terminus 2/XML. There is no separate agent server.
+The script creates neither machines nor Kubernetes jobs: provision an allocation
+and use the [Ray launcher workflow](../../../docs/getting-started/quick-start.md).
+
+This is an example adapted from a previous agentic recipe, **not a new
+end-to-end validated TB2.1 training result**. Training on benchmark tasks
+contaminates that benchmark: do not report subsequent TB2.1 performance as
+held-out generalization. Keep a separate evaluation set.
+
+### Prepare the environment and task data
+
+Use a Miles image with compatible SGLang, Megatron-LM, and Qwen3.8 support.
+Install Harbor as described above on every rollout host, then install the
+small recipe-specific dependency:
+
+```bash
+uv pip install --no-deps -e .
+uv pip install -r examples/experimental/harbor/requirements-qwen38.txt
+git clone https://github.com/harbor-framework/terminal-bench-2-1.git /scratch/tb21
+python examples/experimental/harbor/prepare_terminal_bench.py \
+    --tasks_dir /scratch/tb21/tasks --output /scratch/tb21/train.jsonl
+```
+
+This uses the [official TB2.1 task repository](https://hub.harborframework.com/datasets/terminal-bench/terminal-bench-2-1),
+not TB2.0. Pin and record the task checkout's commit for reproducible runs.
+The task directory must directly contain each task's `task.toml` and
+`instruction.md`. The helper writes one task-ID prompt per task, adds
+`agent_name=terminus-2`, records instruction/config hashes, and refuses to
+overwrite an existing JSONL. It does not expose solutions or test answers.
+Use `--exclude_task TASK_A TASK_B` for an explicit held-out split or tasks your
+E2B provider cannot support (for example GPU or multi-container requirements).
+Check provider capabilities before training; do not silently score unsupported
+environments as model failures.
+
+Stage the checkpoint at `/scratch/models/Qwen3.8-27B` and the same task/data
+paths on every node, using shared storage or explicit synchronization. Mount an
+E2B key file at the same private path on all rollout hosts. Custom E2B endpoints
+can be configured with `E2B_API_URL` and `E2B_SANDBOX_URL`; do not embed keys in
+the script, dataset, or repository. Allow cross-node communication to the
+session-server ports and SGLang router. On an existing Ray allocation set
+`MILES_SCRIPT_EXTERNAL_RAY=1` before launch. This recipe **requires** that mode
+so the shared launcher's fresh-host Ray/SGLang cleanup cannot interrupt an
+existing cluster. Join all allocated nodes to the same Ray cluster first.
+
+### Inspect, then launch
+
+Run from the Miles checkout. This CLI uses Tap's underscore-style flag names:
+
+```bash
+python examples/experimental/harbor/run_qwen38_27b.py \
+    --dry_run --model_dir /scratch/models --data_dir /scratch/tb21 \
+    --output_dir /scratch/runs
+
+# Run only after inspecting the proposed configuration and provisioning nodes.
+export MILES_SCRIPT_EXTERNAL_RAY=1
+python examples/experimental/harbor/run_qwen38_27b.py \
+    --model_dir /scratch/models --data_dir /scratch/tb21 \
+    --output_dir /scratch/runs --megatron_path /opt/Megatron-LM \
+    --e2b_api_key_file /secrets/e2b.key
+```
+
+The second command first converts the supplied HF checkpoint using Miles'
+Qwen3.8 model definition. Pass `--skip_prepare` if the matching conversion
+already exists at `/scratch/models/Qwen3.8-27B_torch_dist`. A new run ID starts
+from those base weights; to resume, supply the original `--run_id` and output
+directory. Never reuse a run ID for a different experiment.
+
+The authoritative defaults live in `ScriptArgs` in the launcher. The baseline
+uses 8 prompts × 32 independent episodes = 256 trajectories per update,
+131,072-token sequence and 49,152-token per-turn response limits, TP4/CP2 on the
+trainers, dynamic token batching, full activation recomputation, CPU optimizer
+offload, and a constant learning rate of 1e-6. It allows 128 concurrent
+episodes, uses cache-aware routing, and corrects async policy lag with clipped
+importance sampling. Trainer logprobs are recomputed; it does **not** enable
+`--use-rollout-logprobs`. Host-memory HiCache is not enabled by this baseline.
+
+Summarization is explicitly **off**, matching the append-only training recipe.
+Do not turn it on by changing an environment variable: the launcher pins it
+off. A summarizing recipe needs session server v2 plus dynamic global batching
+and separate validation of segment/reward accounting. The per-trial agent
+timeout is eight hours, with another 30 minutes for setup/verifier cleanup;
+native verifier limits/resources remain in the task configs.
+
+Checkpoints are saved every 25 updates over 1,000 updates. All outputs go under
+`<output_dir>/<run_id>/`: `checkpoints/`, Miles `traces/`, and complete
+`harbor_trials/`. Keep those paths on a large disk (and collect node-local
+artifacts from every rollout host if they are not shared). A checkpoint with
+optimizer state is hundreds of GiB; arrange retention and external backups.
+The dashboard is enabled; W&B is enabled by the shared launcher when
+`WANDB_API_KEY` is set. No API keys should be passed as command-line arguments.

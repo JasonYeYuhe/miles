@@ -34,6 +34,11 @@ The sparse **Qwen3.8-2.4T-A95B** is a different recipe entirely — see
 
 Sections 3–6 cover the dense 27 B.
 
+For multi-turn agentic training instead of math GRPO, see the
+[Qwen3.8-27B Harbor recipe](https://github.com/radixark/miles/tree/main/examples/experimental/harbor#qwen38-27b-on-terminal-bench-21).
+It trains on Terminal-Bench 2.1 with Terminus 2 and E2B, using separate trainer
+and rollout nodes. Treat TB2.1 as training data, not a held-out evaluation set.
+
 ## 3. Environment Setup
 
 ### 3.1 Download model + datasets

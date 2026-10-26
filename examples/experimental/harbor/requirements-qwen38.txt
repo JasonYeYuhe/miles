@@ -1,0 +1,4 @@
+# Extra CLI dependency for the Qwen recipe and data preparation helper.
+# Harbor and the matching SGLang/Megatron runtime are installed separately;
+# see README.md rather than mixing them into the launcher's environment here.
+typed-argument-parser>=1.11
