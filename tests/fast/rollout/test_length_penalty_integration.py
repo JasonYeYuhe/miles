@@ -1,3 +1,4 @@
+import logging
 from argparse import ArgumentParser, Namespace
 
 import pytest
@@ -114,3 +115,43 @@ def test_cli_defaults_and_explicit_penalty_settings() -> None:
     args = parser.parse_args(["--length-penalty-coeff", "0.1", "--length-penalty-min-tokens", "1000"])
     validate_length_penalty_args(args)
     assert (args.length_penalty_coeff, args.length_penalty_min_tokens) == (0.1, 1000)
+
+
+@pytest.mark.parametrize("coeff", [0.0, 1.0])
+def test_logs_actual_penalty_once_per_session_before_normalization(caplog, coeff: float) -> None:
+    samples = [
+        Sample(
+            index=0, rollout_id=10, group_index=0, generated_token_count=400, reward=1.0, metadata={"session_id": "a"}
+        ),
+        Sample(
+            index=1, rollout_id=10, group_index=0, generated_token_count=600, reward=1.0, metadata={"session_id": "a"}
+        ),
+        Sample(
+            index=2, rollout_id=11, group_index=0, generated_token_count=2000, reward=1.0, metadata={"session_id": "b"}
+        ),
+        Sample(
+            index=3, rollout_id=12, group_index=0, generated_token_count=3000, reward=0.0, metadata={"session_id": "c"}
+        ),
+    ]
+    args = _args(length_penalty_coeff=coeff, grpo_std_normalization=True)
+    caplog.set_level(logging.INFO, logger="miles.ray.rollout.train_data_conversion")
+    apply_reward_nonzero_std_filter(args, samples)
+    assert not caplog.records  # Candidate filtering must not report an applied penalty.
+    _post_process_rewards(args, samples, None)
+    records = [r for r in caplog.records if r.name == "miles.ray.rollout.train_data_conversion"]
+    assert len(records) == 3
+    assert [r.args[:3] for r in records] == [("a", 10, 1000), ("b", 11, 2000), ("c", 12, 3000)]
+    multiplier = 0.5 if coeff else 1.0
+    assert records[1].args[3:] == pytest.approx((multiplier, 1 - multiplier, 1.0, multiplier))
+    assert records[2].args[3:] == (1.0, 0.0, 0.0, 0.0)
+
+
+def test_logs_no_penalty_when_group_has_no_correct_session(caplog) -> None:
+    samples = [
+        Sample(index=i, group_index=0, generated_token_count=length, reward=0.0)
+        for i, length in enumerate([1000, 2000])
+    ]
+    caplog.set_level(logging.INFO, logger="miles.ray.rollout.train_data_conversion")
+    _post_process_rewards(_args(), samples, None)
+    assert len(caplog.records) == 2
+    assert [record.args[3] for record in caplog.records] == [1.0, 1.0]
