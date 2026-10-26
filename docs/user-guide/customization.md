@@ -357,9 +357,12 @@ retain the configured standard-deviation normalization. The filter requires a
 shaped reward range greater than `1e-6` for all-correct groups.
 
 Lengths exclude prompts and tool outputs, and include model-generated reasoning,
-answers, and tool calls across all turns. Session servers count all recorded
-calls, including discarded branches and calls beyond the training token budget,
-once per rollout. Sibling training samples share one rollout reward.
+answers, and tool calls across all retained turns. Session servers count only
+tokens in the final training samples, after selection and sequence-length
+truncation. Discarded retry branches do not count. In V2, shared generated
+prefixes count once through the postprocessor's training-mask ownership;
+retained sibling samples contribute their own trainable tokens to one rollout
+total and share its shaped reward.
 
 Custom generation code should populate `Sample.generated_token_count` with each
 sample's contribution to the rollout's total, counting shared generation once.
