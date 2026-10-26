@@ -316,31 +316,6 @@ def _normalize_rewards_by_rollout(
     return normalized_rewards.tolist()
 
 
-def _log_length_penalties(
-    samples: list[Sample],
-    raw_rewards: list[float],
-    shaped_rewards: list[float],
-    prompt_groups: list[list[int]],
-) -> None:
-    """Log each session/rollout once at the actual shaping boundary, before normalization."""
-    for rows in prompt_groups:
-        for siblings in rollout_segments(samples, rows):
-            row = siblings[0]
-            sample = samples[row]
-            multiplier = shaped_rewards[row] if raw_rewards[row] == 1.0 else 1.0
-            logger.info(
-                "Length penalty: session_id=%s rollout_id=%s generated_tokens=%d "
-                "multiplier=%.12g reward_reduction=%.12g raw_reward=%.12g shaped_reward=%.12g",
-                sample.metadata.get("session_id"),
-                sample.rollout_id if sample.rollout_id is not None else sample.index,
-                sum(samples[index].generated_tokens for index in siblings),
-                multiplier,
-                raw_rewards[row] - shaped_rewards[row],
-                raw_rewards[row],
-                shaped_rewards[row],
-            )
-
-
 def _post_process_rewards(
     args,
     samples: list[Sample] | list[list[Sample]],
@@ -352,11 +327,8 @@ def _post_process_rewards(
         return f(fn_args, samples)
 
     raw_rewards = [sample.get_reward_value(args) for sample in samples]
-    rewards = raw_rewards
     prompt_groups = _reward_group_segments(args, samples, prompt_group_sizes)
-    if getattr(args, "length_penalty_coeff", 0.0) > 0:
-        rewards = apply_length_penalty(args, samples, raw_rewards, prompt_groups)
-    _log_length_penalties(samples, raw_rewards, rewards, prompt_groups)
+    rewards = apply_length_penalty(args, samples, raw_rewards, prompt_groups, log_penalties=True)
     if args.advantage_estimator in ["grpo", "gspo", "reinforce_plus_plus_baseline"] and args.rewards_normalization:
         normalized_rewards = _normalize_rewards_by_rollout(
             args, samples, rewards, prompt_group_sizes, unshaped_rewards=raw_rewards
