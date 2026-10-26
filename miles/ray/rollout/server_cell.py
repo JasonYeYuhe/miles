@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 SHUTDOWN_TIMEOUT = 30
 UNREGISTER_FROM_ROUTER_TIMEOUT = 120
 INITIALIZING_TIMEOUT_SECONDS = 1800.0
+POST_LAUNCH_RELEASE_WARN_INTERVAL_SECONDS = 300.0
 ABORT_REQUEST_TIMEOUT_SECONDS = 30.0
 
 
@@ -67,6 +68,7 @@ class ServerCell:
     _env_reporter: EngineEnvReporter = dataclasses.field(init=False)
     _state: CellState = dataclasses.field(default_factory=StateUninitialized)
     _post_launch_release: asyncio.Task | None = dataclasses.field(default=None, init=False)
+    _post_launch_release_warn_at: float = dataclasses.field(default=0.0, init=False)
 
     def __post_init__(self) -> None:
         self._env_reporter = EngineEnvReporter(interval_seconds=self.args.env_report_interval_seconds)
@@ -211,10 +213,18 @@ class ServerCell:
 
             if self.meta.needs_offload:
                 self._post_launch_release = asyncio.create_task(self._release_memory_after_launch(addr_info))
+                self._post_launch_release_warn_at = time.monotonic() + POST_LAUNCH_RELEASE_WARN_INTERVAL_SECONDS
 
         if (release := self._post_launch_release) is not None:
             # a large engine's release outlasts the tick timeout; later ticks poll it instead of re-probing
             if not release.done():
+                # the release request has no read timeout: a stuck engine is silent until the startup deadline
+                if (now := time.monotonic()) >= self._post_launch_release_warn_at:
+                    logger.warning(
+                        f"ServerCell {self.meta.cell_id}: the post-launch memory release is still waiting on the engine, "
+                        f"{now - self._state.start_time:.0f} s into initialization"
+                    )
+                    self._post_launch_release_warn_at = now + POST_LAUNCH_RELEASE_WARN_INTERVAL_SECONDS
                 return
             if release.cancelled() or release.exception() is not None:
                 self._post_launch_release = None
