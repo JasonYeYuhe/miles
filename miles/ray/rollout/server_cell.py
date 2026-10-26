@@ -220,7 +220,7 @@ class ServerCell:
                 )
 
         if (release := self._post_launch_release) is not None:
-            # a large engine's release outlasts the tick timeout; later ticks poll it instead of re-probing
+            # can outlast the tick timeout, and a probe on a released engine kills its schedulers
             if not release.done():
                 # the release request has no read timeout: a stuck engine is silent until the startup deadline
                 if (now := time.monotonic()) >= self._post_launch_release_warn_at:
