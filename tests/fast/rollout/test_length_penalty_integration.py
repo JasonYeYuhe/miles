@@ -22,6 +22,7 @@ def _args(**overrides) -> Namespace:
             "grpo_std_normalization": False,
             "enable_sample_ownership_checker": False,
             "use_rollout_routing_replay": False,
+            "use_rollout_indexer_replay": False,
             "rollout_top_logprobs_num": 0,
             "use_dynamic_global_batch_size": False,
             **overrides,
