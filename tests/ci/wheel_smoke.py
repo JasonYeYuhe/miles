@@ -11,6 +11,8 @@ from pathlib import Path
 
 MEGATRON_ONLY = ("megatron", "mbridge", "transformer_engine", "apex")
 BACKENDS = ("fsdp", "torchtitan")
+# loaded by name at run time, so importing the drivers does not reach them
+RUNTIME_MODULES = ("miles.rollout.sglang_rollout", "miles.rollout.session.server")
 ENTRY_SCRIPTS = ("train.py", "train_async.py")
 
 
@@ -54,6 +56,8 @@ def main() -> None:
     for backend in BACKENDS:
         importlib.import_module(f"miles.backends.{backend}_utils.actor")
         _parse_args(backend)
+    for module in RUNTIME_MODULES:
+        importlib.import_module(module)
     _check_chat_templates()
 
     print(f"wheel smoke passed: {', '.join(BACKENDS)} without Megatron")

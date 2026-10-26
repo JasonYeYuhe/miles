@@ -93,7 +93,7 @@ jobs:
 
       - name: Install Megatron Bridge override
         if: ${{ github.event.inputs.ci_megatron_bridge_pr != '' || contains(github.event.pull_request.body, 'ci-megatron-bridge-pr:') }}
-        uses: ./.github/actions/install-megatron-bridge
+        uses: ./.ci-actions/.github/actions/install-megatron-bridge
         with:
           ref: ${{ github.event.inputs.ci_megatron_bridge_pr || '' }}
           pr_body: ${{ github.event.pull_request.body || '' }}
