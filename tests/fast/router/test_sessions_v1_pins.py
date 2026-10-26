@@ -16,7 +16,9 @@ from fastapi.responses import JSONResponse
 from tests.fast.router import test_sessions
 from tests.fast.router.test_sessions import _create_session, _post_chat
 
+from miles.rollout.session.samples.codec import decode_samples_and_merge_input_sample
 from miles.utils.test_utils.mock_sglang_server import MockSGLangServer
+from miles.utils.types import Sample
 
 
 # registered here too: in some CI shard combinations the conftest's copy is not visible to this module
@@ -167,9 +169,6 @@ class TestRollbackPins:
         assert len(router_env.backend.request_log) == backend_requests
 
     def test_collect_samples_after_rollback_single_sample(self, router_env):
-        from miles.rollout.session.samples.codec import decode_samples_and_merge_input_sample
-        from miles.utils.types import Sample
-
         # The class fixture plants fake R3 replay payloads that only the
         # records path tolerates; assembly would try to decode them. This pin
         # is about rollback x assembly, so run it with clean meta_info.
@@ -184,8 +183,12 @@ class TestRollbackPins:
 
         with patch.object(MockSGLangServer, "_compute_chat_completions_response", new=clean_meta_response):
             session_id, a1, _ = self._two_turn_session(router_env)
+            discarded_record = self._get(router_env.url, session_id)["records"][-1]
+            discarded_tokens = len(discarded_record["response"]["choices"][0]["meta_info"]["output_token_logprobs"])
             retry = _post_chat(router_env.url, session_id, {"messages": [self.U1, a1, self.T1]})
             assert retry.status_code == 200
+            records = self._get(router_env.url, session_id)["records"]
+            retained_tokens = sum(len(r["response"]["choices"][0]["meta_info"]["output_token_logprobs"]) for r in records)
 
             resp = requests.post(f"{router_env.url}/sessions/{session_id}/samples", json={}, timeout=10.0)
 
@@ -195,6 +198,8 @@ class TestRollbackPins:
         assert len(reply.samples) == 1
         [sample] = reply.samples
         assert sample.response_length > 0
+        assert discarded_tokens > 0
+        assert sample.generated_token_count == retained_tokens + discarded_tokens
         assert len(sample.loss_mask) == sample.response_length
 
     def test_few_shot_first_request_divergent_retry_uses_generated_checkpoint(self, router_env):
