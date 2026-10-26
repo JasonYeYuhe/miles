@@ -213,12 +213,12 @@ class ServerCell:
                 self._post_launch_release = asyncio.create_task(self._release_memory_after_launch(addr_info))
 
         if (release := self._post_launch_release) is not None:
-            # a large engine's release outlasts the tick timeout; the next tick waits on it instead of re-probing
-            try:
-                await asyncio.shield(release)
-            finally:
-                if release.done():
-                    self._post_launch_release = None
+            # a large engine's release outlasts the tick timeout; later ticks poll it instead of re-probing
+            if not release.done():
+                return
+            if release.cancelled() or release.exception() is not None:
+                self._post_launch_release = None
+            release.result()
 
         serve_without_weight_update: bool = not self.meta.update_weights or self.args.debug_rollout_only
         if not serve_without_weight_update and self.args.check_weight_update_equal:
