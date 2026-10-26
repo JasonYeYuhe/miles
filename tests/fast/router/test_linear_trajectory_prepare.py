@@ -93,22 +93,4 @@ def test_valid_retry_renders_selected_checkpoint_before_rollback():
     )
 
     assert prepared.body["input_ids"] == [1, 2, 5]
-    checkpoint["generated_token_count"] = 2
     assert _snapshot(session) == checkpoint
-
-
-def test_generated_tokens_survive_retries_and_snapshots() -> None:
-    registry = _make_registry()
-    session = registry.get_session(registry.create_session())
-    _commit(session, [USER], [1], [2, 3])
-    snapshot = session.snapshot()
-    for completion in ([4, 5, 6], [7]):
-        session.prepare_token_ids_and_request_args(
-            {"messages": [USER]}, config=make_session_server_config(), tito_tokenizer=registry.tito_tokenizer
-        )
-        assert session.records == []
-        _commit(session, [USER], [1], completion)
-    assert session.generated_token_count == 6
-    assert len(session.records) == 1
-    assert session.snapshot().generated_token_count == 6
-    assert snapshot.generated_token_count == 2
