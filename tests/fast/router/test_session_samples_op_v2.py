@@ -326,6 +326,7 @@ async def test_truncation_golden(core):
     assert last.status == Sample.Status.TRUNCATED
     assert last.tokens == _ACCUMULATED[:8]
     assert last.loss_mask == [1, 1, 0, 0, 1]
+    assert last.generated_token_count == 3
     assert last.rollout_log_probs == [-0.125, -0.25, 0.0, 0.0, -0.5]
     assert np.array_equal(last.rollout_routed_experts, _expected_r3(100, 8)[:-1])
 
@@ -1001,13 +1002,35 @@ async def test_custom_picker_keeps_abandoned_leaf(core):
         reply = decode_samples_and_merge_input_sample(bytes(response.body), Sample(), fields=COMPUTED_FIELDS_V2)
         abandoned, replacement = reply.samples
         assert sum(sample.generated_tokens for sample in reply.samples) == 4
-        assert [sample.generated_token_count for sample in reply.samples] == [4, 0]
+        assert [sample.generated_token_count for sample in reply.samples] == [3, 1]
         assert abandoned.tokens == [1, 2, 3, 10, 11, 20, 30]
         assert replacement.tokens == [1, 2, 3, 10, 11, 21, 31]
         # Exactly-once over the SURVIVING set: the abandoned (earlier) leaf now
         # owns the shared root completion; the replacement masks it.
         assert abandoned.loss_mask[:2] == [1, 1]
         assert replacement.loss_mask[:2] == [0, 0]
+
+
+@pytest.mark.parametrize("retry_count", [1, 3])
+async def test_length_count_excludes_discarded_retries(core, retry_count: int) -> None:
+    sid = await _rolled_back_session(core)
+    state = core.registry.sessions[sid]
+    root = state.tree.nodes[0]
+    for _ in range(retry_count):
+        _fabricate_node(
+            state,
+            root,
+            _single_turn_record([1, 2, 3, 10, 11, 21], [32, 33]),
+            [1, 2, 3, 10, 11, 21, 32, 33],
+            completion_span=(6, 8),
+        )
+    response = await core.collect_samples(sid, max_seq_len=None)
+    assert response.status_code == 200
+    reply = decode_samples_and_merge_input_sample(bytes(response.body), Sample(), fields=COMPUTED_FIELDS_V2)
+    # The distinct first branch stays; identical-prompt retries retain only the latest.
+    assert len(reply.samples) == 2
+    assert sum(sample.generated_tokens for sample in reply.samples) == 5
+    assert all(sample.generated_tokens == sum(sample.loss_mask) for sample in reply.samples)
 
 
 async def test_custom_picker_reorder_keeps_earliest_leaf_as_owner(core):

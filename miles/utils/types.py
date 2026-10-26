@@ -180,7 +180,7 @@ class Sample:
     response: str = ""
     response_length: int = 0
     # Generated-token contribution to the rollout, independent of loss masking.
-    # Session assemblers count shared or discarded calls once across sibling rows.
+    # Session assemblers count only retained training tokens, sharing prefix ownership.
     generated_token_count: int | None = None
     label: str | None = None
     reward: float | dict[str, Any] | None = None
