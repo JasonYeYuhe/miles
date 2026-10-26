@@ -518,6 +518,34 @@ class TestTick:
         assert isinstance(cell._state, StateServing)
         assert [name for name, _kwargs in router.calls] == ["add_worker"]
 
+    async def test_a_resume_failing_after_the_release_is_retried_without_probing_or_releasing_again(
+        self, result_api_client, monkeypatch
+    ):
+        """The KV pools stay released after a failed resume, so a retry that probes kills the engine."""
+        probes = {"count": 0}
+
+        async def _counting_probe(server_url: str, api_key, timeout: float = 5.0) -> bool:
+            probes["count"] += 1
+            return True
+
+        monkeypatch.setattr(server_cell_module, "probe_server_healthy", _counting_probe)
+        result_api_client.errors["resume_memory_occupation"] = RuntimeError("engine refused to resume its weights")
+        cell = _make_cell(needs_offload=True)
+        await cell.init()
+        with pytest.raises(RuntimeError, match="refused to resume"):
+            await _tick_through_post_launch_release(cell)
+
+        result_api_client.errors.pop("resume_memory_occupation")
+        await _tick_through_post_launch_release(cell)
+
+        assert probes["count"] == 1
+        assert [name for name, _kwargs in result_api_client.calls] == [
+            "release_memory_occupation",
+            "resume_memory_occupation",
+            "resume_memory_occupation",
+        ]
+        assert isinstance(cell._state, StatePendingWeights)
+
     @pytest.mark.parametrize(
         ("failing_operation", "error_message"),
         [

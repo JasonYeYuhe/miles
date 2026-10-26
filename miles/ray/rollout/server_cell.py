@@ -68,6 +68,7 @@ class ServerCell:
     _env_reporter: EngineEnvReporter = dataclasses.field(init=False)
     _state: CellState = dataclasses.field(default_factory=StateUninitialized)
     _post_launch_release: asyncio.Task | None = dataclasses.field(default=None, init=False)
+    _post_launch_memory_released: bool = dataclasses.field(default=False, init=False)
     _post_launch_release_started_at: float = dataclasses.field(default=0.0, init=False)
     _post_launch_release_warn_at: float = dataclasses.field(default=0.0, init=False)
 
@@ -201,16 +202,18 @@ class ServerCell:
     async def _tick_when_initializing(self) -> None:
         addr_info = self._state.addr_info
         if self._post_launch_release is None:
-            if not await probe_server_healthy(server_url=addr_info.server_url, api_key=self.meta.sglang_api_key):
-                return
+            # memory already released: a probe would kill the engine
+            if not self._post_launch_memory_released:
+                if not await probe_server_healthy(server_url=addr_info.server_url, api_key=self.meta.sglang_api_key):
+                    return
 
-            if self.args.check_weight_update_equal and self.meta.update_weights:
-                await self.check_weights(
-                    action="snapshot",
-                    allow_quant_error=False,
-                    selector=self.args.check_weight_update_selector,
-                    skip_list=None,
-                )
+                if self.args.check_weight_update_equal and self.meta.update_weights:
+                    await self.check_weights(
+                        action="snapshot",
+                        allow_quant_error=False,
+                        selector=self.args.check_weight_update_selector,
+                        skip_list=None,
+                    )
 
             if self.meta.needs_offload:
                 self._post_launch_release = asyncio.create_task(self._release_memory_after_launch(addr_info))
@@ -253,7 +256,9 @@ class ServerCell:
 
     async def _release_memory_after_launch(self, addr_info: CellAddrInfo) -> None:
         api_client = SGLangApiClient(server_url=addr_info.server_url)
-        await api_client.release_memory_occupation()
+        if not self._post_launch_memory_released:
+            await api_client.release_memory_occupation()
+            self._post_launch_memory_released = True
         await api_client.resume_memory_occupation(tags=[GPU_MEMORY_TYPE_WEIGHTS])
 
     async def mark_weights_ready(self) -> None:
