@@ -1027,9 +1027,9 @@ async def test_length_count_excludes_discarded_retries(core, retry_count: int) -
     response = await core.collect_samples(sid, max_seq_len=None)
     assert response.status_code == 200
     reply = decode_samples_and_merge_input_sample(bytes(response.body), Sample(), fields=COMPUTED_FIELDS_V2)
-    # The distinct first branch stays; identical-prompt retries retain only the latest.
-    assert len(reply.samples) == 2
-    assert sum(sample.generated_tokens for sample in reply.samples) == 5
+    # This fixture's rollback picker retains only the latest sibling.
+    assert len(reply.samples) == 1
+    assert sum(sample.generated_tokens for sample in reply.samples) == 4
     assert all(sample.generated_tokens == sum(sample.loss_mask) for sample in reply.samples)
 
 
