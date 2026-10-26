@@ -188,7 +188,9 @@ class TestRollbackPins:
             retry = _post_chat(router_env.url, session_id, {"messages": [self.U1, a1, self.T1]})
             assert retry.status_code == 200
             records = self._get(router_env.url, session_id)["records"]
-            retained_tokens = sum(len(r["response"]["choices"][0]["meta_info"]["output_token_logprobs"]) for r in records)
+            retained_tokens = sum(
+                len(r["response"]["choices"][0]["meta_info"]["output_token_logprobs"]) for r in records
+            )
 
             resp = requests.post(f"{router_env.url}/sessions/{session_id}/samples", json={}, timeout=10.0)
 
