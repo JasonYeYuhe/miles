@@ -201,7 +201,7 @@ class TestRollbackPins:
         [sample] = reply.samples
         assert sample.response_length > 0
         assert discarded_tokens > 0
-        assert sample.generated_token_count == retained_tokens + discarded_tokens
+        assert sample.generated_token_count == retained_tokens
         assert len(sample.loss_mask) == sample.response_length
 
     def test_few_shot_first_request_divergent_retry_uses_generated_checkpoint(self, router_env):

@@ -159,17 +159,10 @@ class SessionCoreV2(SessionCore):
         # authoritative server-owned value only at the wire boundary.
         if self.config.sglang_speculative_algorithm is not None:
             metadata[SESSION_ROLLOUT_METRICS_KEY] = build_session_rollout_metrics(session_id, session.tree.nodes)
-        # One trajectory can yield multiple kept leaves. Charge every committed
-        # generation once, including shared prefixes and branches removed by pickers.
-        for index, sample in enumerate(samples):
-            sample.generated_token_count = (
-                sum(
-                    len(node.record.response["choices"][0]["meta_info"]["output_token_logprobs"])
-                    for node in session.tree.nodes
-                )
-                if index == 0
-                else 0
-            )
+        # Count only the final training samples, after selection, truncation, and
+        # shared-prefix ownership masking. Discarded retries contribute nothing.
+        for sample in samples:
+            sample.generated_token_count = sample.effective_response_length
         return _samples_response(encode_samples(samples, metadata, fields=fields))
 
     async def chat_completions(
