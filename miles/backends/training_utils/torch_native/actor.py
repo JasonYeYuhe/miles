@@ -18,7 +18,7 @@ from miles.backends.training_utils.loss.objective import (
     get_log_probs_and_entropy,
     loss_function,
 )
-from miles.backends.training_utils.metrics import perf
+from miles.backends.training_utils.metrics import perf, train_dump
 from miles.backends.training_utils.metrics.checks import check_grad_norm
 from miles.backends.training_utils.metrics.log_utils import (
     aggregate_forward_results,
@@ -209,6 +209,7 @@ class TorchNativeTrainRayActor(TrainRayActor):
         routing_replay.reset()
 
         self.prof.step(rollout_id=rollout_id)
+        train_dump.save_debug_train_data(self.args, rollout_id=rollout_id, rollout_data=rollout_data)
         self._after_rollout(rollout_id, rollout_data)
 
     @torch.no_grad()
