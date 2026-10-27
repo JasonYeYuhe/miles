@@ -43,6 +43,7 @@ def make_nvme_setup_args(*, directory: Path, no_load_optim: bool) -> Namespace:
         offload_train_disk_dir=str(directory),
         offload_train_disk_chunk_mb=1,
         stream_optimizer_state_moment_dtype="fp32",
+        stream_optimizer_state_page_cache_mb=None,
         no_load_optim=not no_load_optim,
         backend=Namespace(no_load_optim=no_load_optim),
     )
