@@ -9,6 +9,7 @@ import platform
 import secrets
 import shlex
 import socket
+import string
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
@@ -129,9 +130,14 @@ def get_default_wandb_args(test_file: str, run_name_prefix: str | None = None, r
     )
 
 
+_RUN_ID_SUFFIX_ALPHABET = string.ascii_lowercase + string.digits
+
+
 def create_run_id() -> str:
-    # 24 random bits: launches in the same second, in any process, collide with odds of 1 in 16.7M.
-    value = datetime.datetime.utcnow().strftime("%y%m%d-%H%M%S") + f"-{secrets.token_hex(3)}"
+    # 4 base-36 characters: launches in the same second, in any process, collide with odds of 1 in 1.7M, and the id
+    # stays at 18 characters, all that the split-deployment example's release names leave it.
+    suffix = "".join(secrets.choice(_RUN_ID_SUFFIX_ALPHABET) for _ in range(4))
+    value = datetime.datetime.utcnow().strftime("%y%m%d-%H%M%S") + f"-{suffix}"
     if SNAPSHOT_TESTING_ENABLED:
         generated_value_registry.register(kind="run_id", value=value)
     return value
