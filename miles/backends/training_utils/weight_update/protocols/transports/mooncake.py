@@ -53,7 +53,9 @@ class MooncakeTransport:
             )
             succeeded = ret >= 0
         finally:
-            self._has_failed_writes |= not succeeded
+            # write threads share this flag: only ever set it, so one thread's success never clears another's failure
+            if not succeeded:
+                self._has_failed_writes = True
         if not succeeded:
             raise RuntimeError(f"Mooncake batch_transfer_sync_write returned {ret}")
 
