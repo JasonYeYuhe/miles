@@ -48,9 +48,9 @@ setup(
             "modal>=1.5.5",
         ],
     },
-    python_requires=">=3.10",
+    # sglang needs 3.11; nvidia-resiliency-ext 0.6 has no 3.13 wheel
+    python_requires=">=3.11",
     classifiers=[
-        "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
         "Environment :: GPU :: NVIDIA CUDA",
