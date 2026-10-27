@@ -106,8 +106,8 @@ checks, not convergence runs.
 | Qwen3.5-35B-A3B | Full | Validated | |
 | DeepSeek-V2-Chat 236B | Full | Validated | |
 | MiMo-V2.6-Flash | 4-layer | Validated in CI | [Launcher](/models/mimo/mimo-v2-6-flash#42-multi-lora-through-the-tinker-gateway) |
-| GLM-5.2 | 5-layer | Validated on the reduced model; full size untested | |
-| Kimi K2.5 | 2-layer | Validated on the reduced model; full size untested | |
+| GLM-5.2 | 5-layer | Known parity issue: adapters on absorbed MLA are bypassed; fix in [Megatron-Bridge#41](https://github.com/radixark/Megatron-Bridge/pull/41) (in review) | |
+| Kimi K2.5 | 2-layer | Close to parity on the reduced model; full size untested | |
 | GLM-4.5-Air | Full | Known parity issue in shared-expert LoRA | |
 | GPT-OSS-20B / 120B | Full | Known parity issue in MoE inference precision | |
 | DeepSeek-V3.2 | | Unsupported by the pinned Megatron-Bridge | |
