@@ -36,7 +36,8 @@ def mask_truncated_zero_reward(args: Namespace, data: list[list[Sample]]) -> Non
     """
     global _warned_dict_reward
     total = masked = 0
-    for sample in iter_samples(data):
+    # ``data`` is a list of groups; with the session server a group entry is itself a list of samples.
+    for sample in (sample for group in data for sample in iter_samples(group)):
         total += 1
         if not args.reward_key and isinstance(sample.reward, dict):
             # No scalar to compare without --reward-key; leave the sample in the loss.
