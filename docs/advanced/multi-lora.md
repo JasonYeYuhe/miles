@@ -86,13 +86,38 @@ documents failure handling.
 
 ## Supported models
 
-| Model | Launcher | Layout |
-|---|---|---|
-| Qwen3-30B-A3B | [Gateway example](/examples/multi-lora) | One 8-GPU node: 4 training, 4 sampling |
-| MiMo-V2.6-Flash | [Model page](/models/mimo/mimo-v2-6-flash#42-multi-lora-through-the-tinker-gateway) | Two 8-GPU nodes: 8 training, 8 sampling |
+Multi-LoRA is not tied to a model list. It runs on any model that has
+[Megatron-Bridge LoRA](/advanced/lora#lora-training-implementations) support, passes the
+multi-LoRA constraints below, and whose architecture SGLang can serve LoRA for.
+Models with only [native LoRA](/advanced/lora#native-lora) support train a single
+adapter today.
 
-Multi-LoRA uses the Megatron-Bridge LoRA path. Models that only have
-[native LoRA](/advanced/lora#native-lora) support train a single adapter today.
+Validated on `main`:
+
+| Model | Architecture | Evidence |
+|---|---|---|
+| Qwen3-4B-Instruct-2507 | Dense | Gateway CI: multi-tenant isolation and `tinker-cookbook` recipes ([`tests/e2e/lora`](https://github.com/radixark/miles/tree/main/tests/e2e/lora)) |
+| Qwen3-30B-A3B | MoE | [Gateway example](/examples/multi-lora): one 8-GPU node, 4 training and 4 sampling GPUs |
+| MiMo-V2.6-Flash | MoE + MTP | [Launcher and model page](/models/mimo/mimo-v2-6-flash#42-multi-lora-through-the-tinker-gateway), 4-layer gateway CI |
+
+In review:
+
+| Model or layout | PR |
+|---|---|
+| Qwen3.5-35B-A3B with shared-outer expert adapters | [#3899](https://github.com/radixark/miles/pull/3899) |
+| Independent Q/K/V and gate/up projections (`canonical_lora`) | [#3905](https://github.com/radixark/miles/pull/3905) |
+| Ungated MoE experts (Nemotron) | [#4032](https://github.com/radixark/miles/pull/4032) |
+
+The trainer rejects a multi-LoRA launch that breaks any of these constraints:
+
+- Separate training and sampling GPUs: no `--colocate` and no `--offload-train`,
+  because each adapter's gradients stay in GPU buffers between calls.
+- `--pipeline-model-parallel-size 1` and `--qkv-format thd`.
+- Adam optimizer in BF16, without the distributed optimizer.
+- For adapters on MoE experts: grouped-GEMM experts, expert tensor parallel size 1,
+  BF16 experts (no FP8/FP4 training), and all of `gate_proj`, `up_proj` and
+  `down_proj` targeted. The rollout engines may still serve a quantized base.
+- SGLang without attention DP, and with one tokenizer worker.
 
 ## Tinker compatibility
 
