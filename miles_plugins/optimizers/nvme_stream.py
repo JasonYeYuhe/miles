@@ -502,7 +502,7 @@ class NVMeOptimizerStateStore:
         if self._fp32_adam is not None:
             self._sync_lr_wd(self._fp32_adam, self._fp32_group_indices)
             self._fp32_adam.step()
-        self._finish_writeback()
+        self._drain_page_cache_window()
         logger.info(
             f"NVMe streaming step: {len(self.buckets)} buckets, read {read / 1024**3:.1f} GB, "
             f"wrote {written / 1024**3:.1f} GB in {time.monotonic() - started:.1f}s"
@@ -525,7 +525,7 @@ class NVMeOptimizerStateStore:
                 # Initialization writes the whole main state in one pass, just before the checkpoint load and
                 # the engines' pinned allocations, so even with no cap it leaves none of that cached.
                 _drop_from_page_cache(bucket.fd)
-        self._finish_writeback()
+        self._drain_page_cache_window()
         return written
 
     @torch.no_grad()
@@ -535,9 +535,9 @@ class NVMeOptimizerStateStore:
         copy_fn()
         for bucket in self.buckets:
             bucket.flush(segments=("main",), page_cache=self._page_cache)
-        self._finish_writeback()
+        self._drain_page_cache_window()
 
-    def _finish_writeback(self) -> None:
+    def _drain_page_cache_window(self) -> None:
         # Every operation on the store's files drains the window before it returns, so no file stays cached past it
         # and a failed writeback fails that operation rather than a later one, or none after the last.
         if self._page_cache is not None:
@@ -567,7 +567,7 @@ class NVMeOptimizerStateStore:
                 # checkpoint's at once, since its fd does not outlive this loop.
                 self._page_cache.release(bucket.fd, nbytes=bucket.nbytes)
                 _drop_path_from_page_cache(copy)
-        self._finish_writeback()
+        self._drain_page_cache_window()
         if self._fp32_adam is not None:
             torch.save(self._fp32_adam.state_dict(), os.path.join(dirpath, "fp32_resident_optimizer.pt"))
         with open(os.path.join(dirpath, "manifest.json"), "w") as f:
@@ -617,7 +617,7 @@ class NVMeOptimizerStateStore:
                 if step:
                     group["step"] = step
             bucket.allocate_moments()
-        self._finish_writeback()
+        self._drain_page_cache_window()
         fp32_state = os.path.join(dirpath, "fp32_resident_optimizer.pt")
         if self._fp32_adam is not None and os.path.isfile(fp32_state):
             self._fp32_adam.load_state_dict(torch.load(fp32_state))

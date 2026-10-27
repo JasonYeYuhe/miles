@@ -180,7 +180,7 @@ def test_megatron_norm_and_clip_leave_streamed_mains_to_the_store(tmp_path):
 
 @torch.no_grad()
 def test_capped_store_leaves_no_page_cache_after_a_step_save_load_or_refresh(tmp_path):
-    """The cap reaches every path that touches the store's files: step, checkpoint save, resume, and refresh."""
+    """The cap reaches the store's step, checkpoint save, resume, and main-param refresh."""
     from megatron.core.optimizer.clip_grads import multi_tensor_scale_tensor_impl
 
     require_evictable(tmp_path)
