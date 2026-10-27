@@ -15,6 +15,7 @@ class MultiTurnLossMaskGenerator:
         self.tokenizer = tokenizer
         self.system_message_length, self.gen_token_length = self.get_system_message_length()
         self.tokenizer_type = tokenizer_type
+        self.renders_lone_turn_without_reasoning = self._renders_lone_turn_without_reasoning()
 
     def get_response_lengths(self, loss_masks: list[list[int]]) -> list[int]:
         return get_response_lengths(loss_masks)
@@ -48,6 +49,18 @@ class MultiTurnLossMaskGenerator:
 
         system_message_length = idx_1 - ((idx_2 - idx_1) - end_interval - len(raw_token_ids))
         return system_message_length, gen_token_length
+
+    def _renders_lone_turn_without_reasoning(self) -> bool:
+        # The `qwen` path renders each message on its own. Templates such as Qwen3's drop `<think>`
+        # reasoning from an assistant turn that has no user turn before it, so on those tokenizers
+        # that path would silently strip the reasoning from every assistant turn.
+        message = {"role": "assistant", "content": "<think>\nREASONING PROBE\n</think>\n\nANSWER PROBE"}
+        try:
+            rendered = self.tokenizer.apply_chat_template([message], tokenize=False)
+        except Exception:
+            # Some templates (e.g. Qwen3.5) refuse a conversation without a user turn.
+            return False
+        return "ANSWER PROBE" in rendered and "REASONING PROBE" not in rendered
 
     def gen_multi_turn_loss_mask_qwen(
         self, messages: list[dict], tools: list[dict] = None
@@ -163,6 +176,8 @@ class MultiTurnLossMaskGenerator:
         if self.tokenizer_type == "qwen":
             if "<｜Assistant｜>" in self.tokenizer.get_added_vocab():
                 return self.gen_multi_turn_loss_mask_distill_qwen(messages, tools)
+            if self.renders_lone_turn_without_reasoning:
+                return self.gen_multi_turn_loss_mask_qwen3(messages, tools)
 
             return self.gen_multi_turn_loss_mask_qwen(messages, tools)
         elif self.tokenizer_type == "qwen3":

@@ -183,3 +183,27 @@ def test_loss_mask_distill_skips_masked_answers():
     messages = [{"role": "user", "content": "Q"}, {"role": "assistant", "content": "OLD", "step_loss_mask": 0}, *tail]
     with pytest.raises(ValueError, match="step_loss_mask=1"):
         mask_generator.get_loss_mask(messages)
+
+
+@pytest.mark.parametrize(
+    "model_name,drops_reasoning",
+    [("Qwen/Qwen3-8B", True), ("Qwen/Qwen2.5-7B-Instruct", False)],
+)
+def test_loss_mask_qwen_keeps_reasoning(model_name: str, drops_reasoning: bool):
+    # The default `qwen` type must not strip `<think>` reasoning, even on templates (Qwen3) that
+    # drop it when an assistant turn is rendered on its own.
+    mask_generator = MultiTurnLossMaskGenerator(load_tokenizer(model_name), tokenizer_type="qwen")
+    assert mask_generator.renders_lone_turn_without_reasoning is drops_reasoning
+    messages = [
+        {"role": "system", "content": "SYSTEM"},
+        {"role": "user", "content": "Q1"},
+        {"role": "assistant", "content": "<think>\nR1\n</think>\n\nA1"},
+        {"role": "user", "content": "Q2"},
+        {"role": "assistant", "content": "<think>\nR2\n</think>\n\nA2"},
+    ]
+    token_ids, loss_mask = mask_generator.get_loss_mask(messages)
+    assert len(token_ids) == len(loss_mask)
+    assert mask_generator.get_text_from_loss_mask(token_ids, loss_mask) == [
+        "<think>\nR1\n</think>\n\nA1<|im_end|>\n",
+        "<think>\nR2\n</think>\n\nA2<|im_end|>\n",
+    ]
