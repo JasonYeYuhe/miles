@@ -92,19 +92,34 @@ multi-LoRA constraints below, and whose architecture SGLang can serve LoRA for.
 Models with only [native LoRA](/advanced/lora#native-lora) support train a single
 adapter today.
 
-Validated on `main`:
+Per-model status comes from the multi-LoRA correctness tracking in
+[#3284](https://github.com/radixark/miles/issues/3284). Each model was checked for
+train/inference log-prob parity: trained adapters on several tenants, comparing
+Megatron and SGLang log-probs on the same tokens. These are short parity
+checks, not convergence runs.
 
-| Model | Architecture | Evidence |
-|---|---|---|
-| Qwen3-4B-Instruct-2507 | Dense | Gateway CI: multi-tenant isolation and `tinker-cookbook` recipes ([`tests/e2e/lora`](https://github.com/radixark/miles/tree/main/tests/e2e/lora)) |
-| Qwen3-30B-A3B | MoE | [Gateway example](/examples/multi-lora): one 8-GPU node, 4 training and 4 sampling GPUs |
-| MiMo-V2.6-Flash | MoE + MTP | [Launcher and model page](/models/mimo/mimo-v2-6-flash#42-multi-lora-through-the-tinker-gateway), 4-layer gateway CI |
+| Model | Scale tested | Status | Launcher / CI |
+|---|---|---|---|
+| Qwen2.5-0.5B | Full | Validated | |
+| Qwen3-4B-Instruct-2507 | Full | Validated | Gateway CI ([`tests/e2e/lora`](https://github.com/radixark/miles/tree/main/tests/e2e/lora)) |
+| Qwen3-30B-A3B | Full | Runs; parity needs the FP32 inference router from [#3697](https://github.com/radixark/miles/pull/3697) (in review) | [Gateway example](/examples/multi-lora) |
+| Qwen3.5-35B-A3B | Full | Validated | |
+| DeepSeek-V2-Chat 236B | Full | Validated | |
+| MiMo-V2.6-Flash | 4-layer | Validated in CI | [Launcher](/models/mimo/mimo-v2-6-flash#42-multi-lora-through-the-tinker-gateway) |
+| GLM-5.2 | 5-layer | Validated on the reduced model; full size untested | |
+| Kimi K2.5 | 2-layer | Validated on the reduced model; full size untested | |
+| GLM-4.5-Air | Full | Known parity issue in shared-expert LoRA | |
+| GPT-OSS-20B / 120B | Full | Known parity issue in MoE inference precision | |
+| DeepSeek-V3.2 | | Unsupported by the pinned Megatron-Bridge | |
+
+Other Bridge models (for example Llama, Qwen3-Next, Qwen3.6, DeepSeek-V3, Kimi K2,
+full-size GLM-5.x and GLM-4.7-Flash) have not been tested with multi-LoRA.
 
 In review:
 
 | Model or layout | PR |
 |---|---|
-| Qwen3.5-35B-A3B with shared-outer expert adapters | [#3899](https://github.com/radixark/miles/pull/3899) |
+| Shared-outer expert adapters (validated on Qwen3.5-35B-A3B) | [#3899](https://github.com/radixark/miles/pull/3899) |
 | Independent Q/K/V and gate/up projections (`canonical_lora`) | [#3905](https://github.com/radixark/miles/pull/3905) |
 | Ungated MoE experts (Nemotron) | [#4032](https://github.com/radixark/miles/pull/4032) |
 
