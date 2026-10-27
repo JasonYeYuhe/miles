@@ -13,7 +13,7 @@ import pytest
 import torch
 from tests.ci.ci_register import register_cuda_ci, register_rocm_ci
 
-from tests.fast.optimizers.test_nvme_stream import _resident_pages, require_evictable
+from tests.fast.optimizers.nvme_setup_fixtures import require_evictable, resident_pages
 
 from miles_plugins.optimizers.nvme_stream import (
     NVMeOptimizerStateStore,
@@ -179,8 +179,8 @@ def test_megatron_norm_and_clip_leave_streamed_mains_to_the_store(tmp_path):
 
 
 @torch.no_grad()
-def test_capped_store_leaves_no_page_cache_after_a_step_save_or_load(tmp_path):
-    """The cap reaches every path that touches the store's files: the step, a checkpoint save, and a resume."""
+def test_capped_store_leaves_no_page_cache_after_a_step_save_load_or_refresh(tmp_path):
+    """The cap reaches every path that touches the store's files: step, checkpoint save, resume, and refresh."""
     from megatron.core.optimizer.clip_grads import multi_tensor_scale_tensor_impl
 
     require_evictable(tmp_path)
@@ -190,14 +190,14 @@ def test_capped_store_leaves_no_page_cache_after_a_step_save_or_load(tmp_path):
     store.dtypes, store._allow_fresh_state = DTYPES, False
 
     def resident() -> list[int]:
-        return [_resident_pages(bucket.fd) for bucket in store.buckets]
+        return [resident_pages(bucket.fd) for bucket in store.buckets]
 
     def checkpoint_resident() -> int:
         total = 0
         for path in (tmp_path / "ckpt").rglob("bucket*.bin"):
             fd = os.open(path, os.O_RDWR)
             try:
-                total += _resident_pages(fd)
+                total += resident_pages(fd)
             finally:
                 os.close(fd)
         return total
@@ -210,18 +210,19 @@ def test_capped_store_leaves_no_page_cache_after_a_step_save_or_load(tmp_path):
         stepped = [_read_main(bucket, 0, bucket.entries[0].main_param.numel()) for bucket in store.buckets]
 
         store.save_to(str(tmp_path / "ckpt"))
-        store._page_cache.drain()
-        assert resident() == [0, 0]
+        assert resident() == [0, 0], "a save drains its own writeback too"
         assert checkpoint_resident() == 0, "the checkpoint's copy is dropped too"
 
         for bucket in store.buckets:
             os.pwrite(bucket.fd, bytes(bucket.nbytes), 0)
         assert store.load_from(str(tmp_path / "ckpt"))
-        store._page_cache.drain()
-        assert resident() == [0, 0]
+        assert resident() == [0, 0], "so does a resume"
         assert checkpoint_resident() == 0, "reading the checkpoint leaves it uncached"
         for bucket, before in zip(store.buckets, stepped, strict=True):
             torch.testing.assert_close(_read_main(bucket, 0, before.numel()), before, atol=0, rtol=0)
+
+        store.refresh_main_from_model_params(lambda: [e.main_param.zero_() for b in store.buckets for e in b.entries])
+        assert resident() == [0, 0], "and so does a main-param refresh"
     finally:
         store._page_cache.drain()
         for bucket in store.buckets:

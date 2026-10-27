@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import torch
 from tests.ci.ci_register import register_cuda_ci, register_rocm_ci
-from tests.fast.optimizers.test_nvme_stream import _resident_pages, require_evictable
+from tests.fast.optimizers.nvme_setup_fixtures import require_evictable, resident_pages
 
 from miles_plugins.optimizers.nvme_stream import (
     NVMeOptimizerStateStore,
@@ -61,7 +61,7 @@ def test_uncapped_initialization_leaves_nothing_cached(tmp_path):
     require_evictable(tmp_path)
     bucket, *_ = _initialized_store(tmp_path)
 
-    assert _resident_pages(bucket.fd) == 0
+    assert resident_pages(bucket.fd) == 0
     os.close(bucket.fd)
 
 
@@ -100,7 +100,7 @@ def test_capped_page_cache_drops_older_buckets_and_matches_a_resident_adam(tmp_p
                 bucket.flush(page_cache=window)
                 assert param.untyped_storage().nbytes() == 0
             # Flushing the second bucket pushed the first past the cap, so it is written back and dropped.
-            assert _resident_pages(buckets[0].fd) == 0
+            assert resident_pages(buckets[0].fd) == 0
             for bucket, param, reference, resident_adam in zip(
                 buckets, params, references, resident_adams, strict=True
             ):

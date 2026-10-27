@@ -248,7 +248,7 @@ class _Bucket:
     def fetch(self) -> int:
         return self._move(SEGMENTS if self.moments_ready else SEGMENTS[:1], to_disk=False)
 
-    def flush(self, segments=SEGMENTS, page_cache: _PageCacheWindow | None = None) -> int:
+    def flush(self, segments=SEGMENTS, *, page_cache: _PageCacheWindow | None) -> int:
         moved = self._move(segments, to_disk=True)
         if page_cache is not None:
             page_cache.release(self.fd, nbytes=sum(self.segment_nbytes[segment] for segment in segments))
@@ -502,10 +502,7 @@ class NVMeOptimizerStateStore:
         if self._fp32_adam is not None:
             self._sync_lr_wd(self._fp32_adam, self._fp32_group_indices)
             self._fp32_adam.step()
-        if self._page_cache is not None:
-            # Finish the step's writeback inside the step: nothing of the store stays cached past it, and a failed
-            # writeback fails this step rather than a later one, or none after the last.
-            self._page_cache.drain()
+        self._finish_writeback()
         logger.info(
             f"NVMe streaming step: {len(self.buckets)} buckets, read {read / 1024**3:.1f} GB, "
             f"wrote {written / 1024**3:.1f} GB in {time.monotonic() - started:.1f}s"
@@ -528,8 +525,7 @@ class NVMeOptimizerStateStore:
                 # Initialization writes the whole main state in one pass, just before the checkpoint load and
                 # the engines' pinned allocations, so even with no cap it leaves none of that cached.
                 _drop_from_page_cache(bucket.fd)
-        if self._page_cache is not None:
-            self._page_cache.drain()
+        self._finish_writeback()
         return written
 
     @torch.no_grad()
@@ -539,6 +535,13 @@ class NVMeOptimizerStateStore:
         copy_fn()
         for bucket in self.buckets:
             bucket.flush(segments=("main",), page_cache=self._page_cache)
+        self._finish_writeback()
+
+    def _finish_writeback(self) -> None:
+        # Every operation on the store's files drains the window before it returns, so no file stays cached past it
+        # and a failed writeback fails that operation rather than a later one, or none after the last.
+        if self._page_cache is not None:
+            self._page_cache.drain()
 
     @torch.no_grad()
     def save_to(self, base_dir: str) -> None:
@@ -564,6 +567,7 @@ class NVMeOptimizerStateStore:
                 # checkpoint's at once, since its fd does not outlive this loop.
                 self._page_cache.release(bucket.fd, nbytes=bucket.nbytes)
                 _drop_path_from_page_cache(copy)
+        self._finish_writeback()
         if self._fp32_adam is not None:
             torch.save(self._fp32_adam.state_dict(), os.path.join(dirpath, "fp32_resident_optimizer.pt"))
         with open(os.path.join(dirpath, "manifest.json"), "w") as f:
@@ -613,6 +617,7 @@ class NVMeOptimizerStateStore:
                 if step:
                     group["step"] = step
             bucket.allocate_moments()
+        self._finish_writeback()
         fp32_state = os.path.join(dirpath, "fp32_resident_optimizer.pt")
         if self._fp32_adam is not None and os.path.isfile(fp32_state):
             self._fp32_adam.load_state_dict(torch.load(fp32_state))
