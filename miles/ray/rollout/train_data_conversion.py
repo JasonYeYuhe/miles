@@ -325,11 +325,8 @@ def _post_process_rewards(
         return f(fn_args, samples)
 
     raw_rewards = [sample.get_reward_value(args) for sample in samples]
-    rewards = raw_rewards
-    if getattr(args, "length_penalty_coeff", 0.0) > 0:
-        rewards = apply_length_penalty(
-            args, samples, raw_rewards, _reward_group_segments(args, samples, prompt_group_sizes)
-        )
+    prompt_groups = _reward_group_segments(args, samples, prompt_group_sizes)
+    rewards = apply_length_penalty(args, samples, raw_rewards, prompt_groups, log_penalties=True)
     if args.advantage_estimator in ["grpo", "gspo", "reinforce_plus_plus_baseline"] and args.rewards_normalization:
         normalized_rewards = _normalize_rewards_by_rollout(
             args, samples, rewards, prompt_group_sizes, unshaped_rewards=raw_rewards
