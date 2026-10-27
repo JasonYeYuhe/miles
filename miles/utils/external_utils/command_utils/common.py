@@ -6,7 +6,7 @@ import json
 import logging
 import os
 import platform
-import random
+import secrets
 import shlex
 import socket
 import subprocess
@@ -130,7 +130,8 @@ def get_default_wandb_args(test_file: str, run_name_prefix: str | None = None, r
 
 
 def create_run_id() -> str:
-    value = datetime.datetime.utcnow().strftime("%y%m%d-%H%M%S") + f"-{random.Random().randint(0, 999):03d}"
+    # 24 random bits: launches in the same second, in any process, collide with odds of 1 in 16.7M.
+    value = datetime.datetime.utcnow().strftime("%y%m%d-%H%M%S") + f"-{secrets.token_hex(3)}"
     if SNAPSHOT_TESTING_ENABLED:
         generated_value_registry.register(kind="run_id", value=value)
     return value
