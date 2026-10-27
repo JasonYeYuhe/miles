@@ -207,3 +207,14 @@ def test_loss_mask_qwen_keeps_reasoning(model_name: str, drops_reasoning: bool):
         "<think>\nR1\n</think>\n\nA1<|im_end|>\n",
         "<think>\nR2\n</think>\n\nA2<|im_end|>\n",
     ]
+
+
+def test_loss_mask_qwen_plain_answers_stay_on_qwen_path():
+    # Without reasoning in the data, Qwen3 keeps the per-turn `qwen` rendering (no injected empty think block).
+    mask_generator = MultiTurnLossMaskGenerator(load_tokenizer("Qwen/Qwen3-8B"), tokenizer_type="qwen")
+    messages = [
+        {"role": "user", "content": "Q1"},
+        {"role": "assistant", "content": "A1"},
+    ]
+    token_ids, loss_mask = mask_generator.get_loss_mask(messages)
+    assert mask_generator.get_text_from_loss_mask(token_ids, loss_mask) == ["A1<|im_end|>\n"]

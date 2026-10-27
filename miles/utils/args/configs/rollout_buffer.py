@@ -32,8 +32,8 @@ class RolloutBufferRolloutOnlyConfig(BaseConfig):
             choices=["qwen", "qwen3", "distill_qwen"],
             help=(
                 "Loss mask type. `qwen` switches to the `distill_qwen` path for DeepSeek-style tokenizers and to "
-                "the `qwen3` path for templates (such as Qwen3's) that drop `<think>` reasoning from an assistant "
-                "turn rendered on its own."
+                "the `qwen3` path when the data contains reasoning and the template (such as Qwen3's) drops "
+                "`<think>` reasoning from an assistant turn rendered on its own."
             ),
         ),
     ] = "qwen"

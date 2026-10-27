@@ -10,6 +10,10 @@ def get_response_lengths(loss_masks: list[list[int]]) -> list[int]:
     return [len(mask[mask.index(1) :]) if 1 in mask else 0 for mask in loss_masks]
 
 
+def _has_reasoning(message: dict) -> bool:
+    return bool(message.get("reasoning_content")) or "<think>" in (message.get("content") or "")
+
+
 class MultiTurnLossMaskGenerator:
     def __init__(self, tokenizer: AutoTokenizer, tokenizer_type: str = "qwen"):
         self.tokenizer = tokenizer
@@ -176,7 +180,14 @@ class MultiTurnLossMaskGenerator:
         if self.tokenizer_type == "qwen":
             if "<｜Assistant｜>" in self.tokenizer.get_added_vocab():
                 return self.gen_multi_turn_loss_mask_distill_qwen(messages, tools)
-            if self.renders_lone_turn_without_reasoning:
+            # Switch only when there is reasoning to lose: on plain answers the `qwen3` path would add the
+            # template's empty `<think></think>` block. It also slices per-turn renders assuming no
+            # default system block, so templates that inject one stay on the `qwen` path.
+            if (
+                self.renders_lone_turn_without_reasoning
+                and self.system_message_length == 0
+                and any(_has_reasoning(m) for m in messages if m["role"] == "assistant")
+            ):
                 return self.gen_multi_turn_loss_mask_qwen3(messages, tools)
 
             return self.gen_multi_turn_loss_mask_qwen(messages, tools)
