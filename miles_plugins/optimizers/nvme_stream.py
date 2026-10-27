@@ -118,7 +118,7 @@ def _drop_path_from_page_cache(path: str) -> None:
 
 
 class _PageCacheWindow:
-    """Caps how much of the store's files the host page cache holds, without a flush waiting on its own writeback.
+    """Caps the page cache of the store's files and their checkpoint copies; no flush waits on its own writeback.
 
     A writer thread drops each released file in release order; both syscalls release the GIL, so a file's
     writeback overlaps the buckets after it. A release waits only while more than the cap is still waiting to be
@@ -131,9 +131,13 @@ class _PageCacheWindow:
         self._waiting: deque[tuple[int, Future]] = deque()
         self._waiting_bytes = 0
 
-    def release(self, fd: int, nbytes: int) -> None:
-        """Queue a store file just written or read, ``nbytes`` of it now in the page cache, to be dropped."""
-        self._waiting.append((nbytes, self._writer.submit(_drop_from_page_cache, fd)))
+    def release(self, file: int | str, nbytes: int) -> None:
+        """Queue a file just written or read, ``nbytes`` of it now in the page cache, to be dropped.
+
+        ``file`` is a store file's fd, or the path of a checkpoint copy, which the writer opens and closes itself.
+        """
+        drop = _drop_path_from_page_cache if isinstance(file, str) else _drop_from_page_cache
+        self._waiting.append((nbytes, self._writer.submit(drop, file)))
         self._waiting_bytes += nbytes
         while self._waiting and (self._waiting_bytes > self._cap_bytes or self._waiting[0][1].done()):
             self._retire_oldest()
@@ -563,10 +567,10 @@ class NVMeOptimizerStateStore:
             copy = os.path.join(dirpath, os.path.basename(bucket.path))
             shutil.copyfile(bucket.path, copy)
             if self._page_cache is not None:
-                # Both ends of the copy are a full bucket in the cache: the store's file through the window, the
-                # checkpoint's at once, since its fd does not outlive this loop.
+                # Both ends of the copy are a full bucket in the cache; both go through the window, so one bucket's
+                # writeback overlaps the next bucket's copy.
                 self._page_cache.release(bucket.fd, nbytes=bucket.nbytes)
-                _drop_path_from_page_cache(copy)
+                self._page_cache.release(copy, nbytes=bucket.nbytes)
         self._drain_page_cache_window()
         if self._fp32_adam is not None:
             torch.save(self._fp32_adam.state_dict(), os.path.join(dirpath, "fp32_resident_optimizer.pt"))
@@ -612,7 +616,7 @@ class NVMeOptimizerStateStore:
             shutil.copyfile(source, bucket.path)
             if self._page_cache is not None:
                 self._page_cache.release(bucket.fd, nbytes=bucket.nbytes)
-                _drop_path_from_page_cache(source)
+                self._page_cache.release(source, nbytes=bucket.nbytes)
             for group, step in zip(bucket.adam.param_groups, meta["steps"], strict=True):
                 if step:
                     group["step"] = step

@@ -63,10 +63,11 @@ def test_a_release_within_the_cap_returns_while_the_writeback_is_still_running(m
     assert dropped == [10, 11]
 
 
-def test_zero_cap_drops_each_file_before_its_release_returns(written_file):
+@pytest.mark.parametrize("by_path", [False, True], ids=["store-fd", "checkpoint-path"])
+def test_zero_cap_drops_each_file_before_its_release_returns(written_file, tmp_path, by_path):
     window = nvme_stream._PageCacheWindow(cap_bytes=0)
     fd = written_file("bucket.bin")
-    window.release(fd, _FILE_BYTES)
+    window.release(str(tmp_path / "bucket.bin") if by_path else fd, _FILE_BYTES)
 
     assert resident_pages(fd) == 0
 
