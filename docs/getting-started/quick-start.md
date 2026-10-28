@@ -105,14 +105,17 @@ Once the engines warm up and the first rollout completes, the log settles into
 per-rollout metric lines (values illustrative, keys abridged):
 
 ```text
-perf 0: {'perf/rollout_time': 98.6, ...}
-rollout 0: {'rollout/raw_reward': 0.32, 'rollout/log_probs': -0.27, ...}
+perf 0: {'rollout/raw_reward': 0.32, 'perf/rollout_time': 98.6, ...}
+rollout 0: {'rollout/raw_reward_filtered': 0.32, 'rollout/log_probs': -0.27, ...}
 step 0: {'train/loss': 0.0021, 'train/pg_loss': 0.0018, 'train/grad_norm': 0.62, ...}
 perf 0: {'perf/train_wait_time': 101.2, 'perf/actor_train_time': 41.3, ...}
 ```
 
-`rollout/raw_reward` is the number to watch: the mean reward of the freshly scored
-responses, drifting upward as the policy improves. You have a live RL run.
+`rollout/raw_reward` is the number to watch: the mean available scalar reward before dynamic sampling filters or reward post-processing, including samples subsequently dropped from training. It replaces `rollout/raw_reward_unfiltered`; `rollout/raw_reward_filtered` retains the old training-batch mean. Training rewards and advantages are unchanged.
+
+Missing rewards and structured rewards without `--reward-key` do not contribute; a window without scalar rewards emits no point. Fully async runs report samples arriving during the collection window, which can span weight versions. Custom rollout functions must supply this metric in `RolloutFnTrainOutput.metrics`; the trainer does not substitute a filtered mean. Compare model checkpoints on a fixed evaluation set for a consistent assessment.
+
+Existing `rollout/raw_reward` curves and CI history from before this semantic change describe the filtered batch and are not directly comparable. Start a new run for the new curve; CI maintainers must reset affected historical baselines using the [metric-history gate procedure](/developer/ci/03-metric-history-gate#notes).
 
 ## What's happening
 
